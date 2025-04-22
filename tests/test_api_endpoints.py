@@ -43,6 +43,21 @@ class TestAPIEndpoints(unittest.TestCase):
         # Clean up temporary directory
         self.temp_dir.cleanup()
     
+    def test_logo_endpoint(self):
+        """Test logo serving endpoint."""
+        # Check if the logo file exists
+        self.assertTrue(os.path.exists("app_logo.png"), "Logo file does not exist")
+        
+        # Send GET request to logo endpoint
+        response = self.app.get('/logo')
+        
+        # Verify response
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, 'image/png')
+        
+        # Verify content length is greater than 0 (valid image)
+        self.assertGreater(len(response.data), 0)
+    
     @patch('app.get_embedding')
     def test_add_document(self, mock_get_embedding):
         """Test adding a document via the API."""
@@ -212,6 +227,9 @@ class TestAPIEndpoints(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertIn("documents_indexed", data)
         self.assertIn("documents_metadata", data)
+        self.assertIn("app_name", data)
+        self.assertEqual(data["app_name"], "VectorVault")
+        self.assertIn("logo_url", data)
 
 if __name__ == '__main__':
     unittest.main() 

@@ -5,7 +5,7 @@ import time
 from openai import OpenAI
 import faiss
 import numpy as np
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -87,6 +87,12 @@ def validate_document(doc_data):
         errors.append("Metadata must be a JSON object")
     
     return errors
+
+# Serve the logo
+@app.route('/logo')
+def get_logo():
+    """Serve the app logo."""
+    return send_file('app_logo.png', mimetype='image/png')
 
 # Add document endpoint
 @app.route('/documents', methods=['POST'])
@@ -258,7 +264,9 @@ def health_check():
             "documents_indexed": index.ntotal,
             "documents_metadata": len(doc_store),
             "embedding_model": EMBEDDING_MODEL,
-            "llm_model": LLM
+            "llm_model": LLM,
+            "app_name": "VectorVault",
+            "logo_url": request.url_root + "logo"
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

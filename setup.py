@@ -5,7 +5,8 @@ VectorVault Setup Script
 This script helps set up the VectorVault project by:
 1. Checking if the .env file exists
 2. Checking if the dependencies are installed
-3. Loading sample data if desired
+3. Checking if the app logo exists
+4. Loading sample data if desired
 """
 
 import os
@@ -78,6 +79,18 @@ def check_dependencies():
     else:
         print("\n✅ All dependencies are installed.")
     
+    return True
+
+def check_logo_file():
+    """Check if the app logo file exists."""
+    logo_file = Path("app_logo.png")
+    
+    if not logo_file.exists():
+        print("\n❌ App logo file (app_logo.png) not found!")
+        print("Please make sure the app_logo.png file is in the root directory.")
+        return False
+    
+    print("\n✅ App logo file exists.")
     return True
 
 def load_sample_data():
@@ -178,6 +191,10 @@ def main():
     
     # Check dependencies
     if not check_dependencies():
+        return
+        
+    # Check app logo
+    if not check_logo_file():
         return
     
     # Ask about sample data

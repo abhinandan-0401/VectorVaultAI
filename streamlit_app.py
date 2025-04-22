@@ -4,6 +4,7 @@ import json
 import pandas as pd
 from io import StringIO
 import time
+import os
 
 # Configuration
 API_URL = "http://localhost:5000"
@@ -45,12 +46,25 @@ st.markdown("""
         border: 2px solid #4B9FE1;
         border-radius: 0.5rem;
     }
+    .logo-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 1rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# App header
-st.markdown("<h1 class='main-header'>VectorVault</h1>", unsafe_allow_html=True)
-st.markdown("<p class='sub-header'>Knowledge, Instantly Retrieved</p>", unsafe_allow_html=True)
+# Sidebar logo
+with st.sidebar:
+    st.image("app_logo.png", width=250)
+
+# App header with logo
+col1, col2 = st.columns([1, 5])
+with col1:
+    st.image("app_logo.png", width=100)
+with col2:
+    st.markdown("<h1 class='main-header'>VectorVault</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Knowledge, Instantly Retrieved</p>", unsafe_allow_html=True)
 
 # Check API health
 try:

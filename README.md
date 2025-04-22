@@ -4,7 +4,9 @@
 
 VectorVault is a simple document search engine that uses OpenAI embeddings and FAISS vector database to provide semantic search capabilities.
 
-![VectorVault Screenshot](https://via.placeholder.com/800x400?text=VectorVault+Screenshot)
+<div align="center">
+  <img src="app_logo.png" alt="VectorVault Logo" width="300"/>
+</div>
 
 ## Features
 
@@ -191,6 +193,7 @@ Results are ranked by semantic similarity to your query, not just keyword matchi
 vectorvault/
 ├── app.py                  # Flask backend
 ├── streamlit_app.py        # Streamlit frontend
+├── app_logo.png            # Application logo
 ├── requirements.txt        # Python dependencies
 ├── requirements-dev.txt    # Development dependencies
 ├── .env                    # Environment variables (not in repo)
@@ -250,5 +253,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-_VectorVault - Knowledge, Instantly Retrieved_  
-_Powered by OpenAI and FAISS_ 
+<div align="center">
+  <img src="app_logo.png" alt="VectorVault Logo" width="100"/>
+  <p><em>VectorVault - Knowledge, Instantly Retrieved</em><br>
+  Powered by OpenAI and FAISS</p>
+</div> 

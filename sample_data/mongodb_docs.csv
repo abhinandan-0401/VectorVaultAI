@@ -1,0 +1,6 @@
+text,source,category,author
+"MongoDB uses BSON, a binary representation of JSON documents, though MongoDB supports many more data types than JSON.",MongoDB Docs,Technical,MongoDB Team
+"MongoDB Compass is the GUI for MongoDB. It allows you to analyze and understand your data without formal knowledge of MongoDB queries.",Tools,GUI,MongoDB Team
+"MongoDB Atlas Search delivers sophisticated search functionality without the operational overhead of a separate search engine.",Atlas,Search,Product Team
+"MongoDB Realm is a development platform designed for modern, data-driven applications.",Development,Mobile,Dev Team
+"MongoDB supports field, range, and regular expression queries to retrieve specific documents.",Query,Technical,Documentation Team 

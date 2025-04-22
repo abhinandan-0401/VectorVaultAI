@@ -1,0 +1,42 @@
+[
+  {
+    "text": "MongoDB's document model is flexible, allowing nested documents and arrays reduces the need for joins.",
+    "metadata": {
+      "source": "Technical Documentation",
+      "category": "Features",
+      "importance": "high"
+    }
+  },
+  {
+    "text": "MongoDB provides high availability with replica sets. A replica set consists of multiple copies of data.",
+    "metadata": {
+      "source": "Architecture Guide",
+      "category": "Reliability",
+      "importance": "critical"
+    }
+  },
+  {
+    "content": "MongoDB handles scale-out with sharding, distributing data across multiple machines.",
+    "metadata": {
+      "source": "Scaling Guide",
+      "category": "Performance",
+      "updated": "2023-05-15"
+    }
+  },
+  {
+    "text": "MongoDB Charts is a data visualization tool built natively into MongoDB Atlas.",
+    "metadata": {
+      "source": "MongoDB Blog",
+      "category": "Visualization",
+      "release_year": 2019
+    }
+  },
+  {
+    "text": "MongoDB Aggregation Pipeline allows for data transformation and analysis within the database.",
+    "metadata": {
+      "source": "User Guide",
+      "category": "Query",
+      "difficulty": "advanced"
+    }
+  }
+] 

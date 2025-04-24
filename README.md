@@ -5,7 +5,7 @@
 VectorVault is a semantic document search engine that uses OpenAI embeddings and FAISS vector database to provide powerful search capabilities.
 
 <div align="center">
-  <img src="app_logo.png" alt="VectorVault Logo" width="300"/>
+  <img src="ui/app_logo.png" alt="VectorVault Logo" width="300"/>
 </div>
 
 ## Features
@@ -286,7 +286,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-  <img src="app_logo.png" alt="VectorVault Logo" width="100"/>
+  <img src="ui/app_logo.png" alt="VectorVault Logo" width="100"/>
   <p><em>VectorVault - Knowledge, Instantly Retrieved</em><br>
   Powered by OpenAI and FAISS</p>
 </div> 

@@ -50,5 +50,6 @@ Thumbs.db
 # Test Coverage
 .coverage.*
 
-# Test Reports
+*.sh
+*.ps1
 

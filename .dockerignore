@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+
+# Distribution / packaging
+.env
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment
+venv/
+ENV/
+env/
+
+# FAISS index and documents (will be loaded from GCS in production)
+faiss_index.index
+document_metadata.json
+
+# Test and development files
+notebooks/
+tests/
+.coverage
+pytest.ini
+requirements-dev.txt
+
+# Local data
+sample_data/ 

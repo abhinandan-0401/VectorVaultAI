@@ -652,6 +652,12 @@ def health_check():
             "location": GCS_BUCKET_NAME if GCS_BUCKET_NAME else "local filesystem"
         }
         
+        # Count unique document sources
+        unique_sources = set()
+        for doc_id, doc in doc_store.items():
+            if "metadata" in doc and "source" in doc["metadata"]:
+                unique_sources.add(doc["metadata"]["source"])
+        
         # Get features supported
         features = ["search", "batch_upload", "document_upload"]
         if pdf_processor:
@@ -662,6 +668,8 @@ def health_check():
         return jsonify({
             "status": "ok",
             "documents_indexed": index.ntotal,
+            "chunks_count": index.ntotal,
+            "unique_documents": len(unique_sources),
             "documents_metadata": len(doc_store),
             "embedding_model": EMBEDDING_MODEL,
             "llm_model": LLM,

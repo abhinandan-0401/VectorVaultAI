@@ -166,7 +166,8 @@ def check_api_health():
             with st.sidebar:
                 st.subheader("System Status")
                 st.success(f"✅ API Connected")
-                st.info(f"📚 Documents: {health_data.get('documents_indexed', 0)}")
+                st.info(f"📚 Documents: {health_data.get('unique_documents', 0)} PDFs")
+                st.info(f"🧩 Chunks: {health_data.get('chunks_count', 0)} text segments")
                 st.info(f"🧠 Model: {health_data.get('embedding_model', 'text-embedding-3-small')}")
                 if health_data.get('storage'):
                     st.info(f"💾 Storage: {health_data.get('storage', {}).get('type', 'Local')}")

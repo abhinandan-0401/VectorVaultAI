@@ -53,3 +53,5 @@ Thumbs.db
 *.sh
 *.ps1
 
+/tmp/*
+

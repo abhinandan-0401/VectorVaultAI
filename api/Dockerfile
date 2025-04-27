@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app.py .
+COPY pdf_processor.py .
+COPY rag_processor.py .
 COPY app_logo.png .
 
 # Environment variables

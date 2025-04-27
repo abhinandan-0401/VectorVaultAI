@@ -1,4 +1,7 @@
 streamlit
 requests
 pandas
-python-dotenv 
+python-dotenv
+Pillow
+matplotlib
+pyarrow 

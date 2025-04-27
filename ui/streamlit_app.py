@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import time
-from io import StringIO
+from io import StringIO, BytesIO
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
@@ -20,6 +20,15 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Feature toggles - set to False to disable features in sidebar
+SIDEBAR_FEATURES = {
+    "search": False,          # Remove Search from sidebar
+    "document_upload": False, # Remove Document Upload from sidebar
+    "batch_upload": False,    # Remove Batch Upload from sidebar
+    "pdf_processing": False,  # Remove PDF Processing from sidebar
+    "vaultgpt": False         # Remove VaultGPT from sidebar
+}
 
 # Configuration
 API_URL = os.getenv("API_URL", "http://localhost:5000")
@@ -91,6 +100,38 @@ st.markdown("""
         justify-content: center;
         margin-bottom: 1rem;
     }
+    .source-header {
+        font-weight: bold;
+        color: #4B9FE1;
+        font-size: 1.2rem;
+    }
+    .message-container {
+        display: flex;
+        margin-bottom: 10px;
+    }
+    .user-message {
+        background-color: #e8eaf6;
+        padding: 10px 15px;
+        border-radius: 15px 15px 15px 5px;
+        margin-left: auto;
+        margin-right: 10px;
+        max-width: 80%;
+        color: #333333;
+    }
+    .ai-message {
+        background-color: #2E7D32;
+        padding: 10px 15px;
+        border-radius: 15px 15px 5px 15px;
+        margin-right: auto;
+        margin-left: 10px;
+        max-width: 80%;
+        color: #FFFFFF;
+    }
+    .source-citation {
+        font-size: 0.8rem;
+        color: #B2DFDB;
+        font-style: italic;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -116,6 +157,7 @@ def check_api_health():
     
     Returns:
         bool: True if API is available, False otherwise
+        Dict: Health data from API
     """
     try:
         health_response = requests.get(get_api_endpoint("health"))
@@ -128,17 +170,18 @@ def check_api_health():
                 st.info(f"🧠 Model: {health_data.get('embedding_model', 'text-embedding-3-small')}")
                 if health_data.get('storage'):
                     st.info(f"💾 Storage: {health_data.get('storage', {}).get('type', 'Local')}")
-            return True
+            
+            return True, health_data
         else:
             st.sidebar.error("❌ API Unavailable")
             logger.error(f"API health check failed: {health_response.status_code}")
-            return False
+            return False, {}
     except Exception as e:
         st.sidebar.error(f"❌ Cannot connect to API: {str(e)}")
         st.sidebar.info(f"Make sure the API is running at {API_URL}")
         st.sidebar.info(f"API URL: {API_URL}")
         logger.error(f"API connection error: {str(e)}")
-        return False
+        return False, {}
 
 
 def search_tab():
@@ -149,10 +192,12 @@ def search_tab():
                          placeholder="What would you like to know?", 
                          key="search_query")
     
-    col1, col2 = st.columns([1, 4])
+    col1, col2, col3 = st.columns([1, 2, 2])
     with col1:
         top_n = st.number_input("Results:", min_value=1, max_value=20, value=5, step=1)
     with col2:
+        group_results = st.checkbox("Group results by source", value=True)
+    with col3:
         search_button = st.button("🔍 Search", use_container_width=True)
     
     if search_button and query:
@@ -161,27 +206,63 @@ def search_tab():
                 logger.info(f"Searching for: {query}")
                 response = requests.get(
                     get_api_endpoint("search"), 
-                    params={"q": query, "n": top_n}
+                    params={"q": query, "n": top_n, "group": str(group_results).lower()}
                 )
                 
             if response.status_code == 200:
-                results = response.json().get("results", [])
-                st.write(f"Found {len(results)} results:")
+                result_data = response.json()
                 
-                if results:
-                    for i, result in enumerate(results):
-                        with st.expander(f"Result {i+1}: {result['text'][:60]}...", expanded=i==0):
-                            st.markdown(f"**ID:** `{result['id']}`")
-                            st.markdown(f"**Score:** {1.0 - result['distance']:.4f}")
-                            st.markdown("**Document:**")
-                            st.markdown(f"{result['text']}")
+                if group_results and "groups" in result_data:
+                    groups = result_data.get("groups", [])
+                    st.write(f"Found {result_data.get('total_results', 0)} results in {len(groups)} sources:")
+                    
+                    if groups:
+                        for group in groups:
+                            source = group.get("source", "Unknown")
+                            documents = group.get("documents", [])
+                            avg_score = group.get("avg_score", 0)
                             
-                            if result.get('metadata'):
-                                st.markdown("**Metadata:**")
-                                st.json(result['metadata'])
+                            with st.expander(f"📁 {source} ({len(documents)} documents, Relevance: {avg_score:.2f})", expanded=True):
+                                st.markdown(f"<p class='source-header'>{source}</p>", unsafe_allow_html=True)
+                                
+                                for i, doc in enumerate(documents):
+                                    with st.expander(f"Document {i+1}: {doc['text'][:60]}...", expanded=i==0):
+                                        st.markdown(f"**ID:** `{doc['id']}`")
+                                        st.markdown(f"**Score:** {doc.get('score', 0):.4f}")
+                                        
+                                        # Display page number if available
+                                        if "page" in doc.get("metadata", {}):
+                                            st.markdown(f"**Page:** {doc['metadata']['page']}")
+                                        
+                                        st.markdown("**Content:**")
+                                        st.markdown(f"{doc['text']}")
+                                        
+                                        if doc.get('metadata') and any(k != "source" and k != "page" for k in doc['metadata']):
+                                            st.markdown("**Additional Metadata:**")
+                                            display_metadata = {k: v for k, v in doc['metadata'].items() if k != "source" and k != "page"}
+                                            st.json(display_metadata)
+                    else:
+                        st.info("No results found. Try a different query.")
+                        logger.info(f"No results found for query: {query}")
                 else:
-                    st.info("No results found. Try a different query.")
-                    logger.info(f"No results found for query: {query}")
+                    # Standard results display (not grouped)
+                    results = result_data.get("results", [])
+                    st.write(f"Found {len(results)} results:")
+                    
+                    if results:
+                        for i, result in enumerate(results):
+                            with st.expander(f"Result {i+1}: {result['text'][:60]}...", expanded=i==0):
+                                st.markdown(f"**ID:** `{result['id']}`")
+                                st.markdown(f"**Score:** {result.get('score', 1.0 - result.get('distance', 0)):.4f}")
+                                st.markdown("**Document:**")
+                                st.markdown(f"{result['text']}")
+                                
+                                if result.get('metadata'):
+                                    st.markdown("**Metadata:**")
+                                    st.json(result['metadata'])
+                    else:
+                        st.info("No results found. Try a different query.")
+                        logger.info(f"No results found for query: {query}")
             else:
                 st.error(f"Error: {response.json().get('error', 'Unknown error')}")
                 logger.error(f"Search error: {response.json().get('error')}")
@@ -224,7 +305,7 @@ def upload_tab():
             st.json(st.session_state.custom_metadata)
             if st.button("Clear Custom Metadata"):
                 st.session_state.custom_metadata = {}
-                st.experimental_rerun()
+                st.rerun()
     
     submit_button = st.button("📤 Upload Document", use_container_width=True)
     
@@ -266,187 +347,196 @@ def upload_tab():
             logger.error(f"Document upload exception: {str(e)}")
 
 
-def batch_upload_tab():
-    """Render the batch upload tab."""
-    st.header("Batch Upload")
+def pdf_upload_tab(health_data):
+    """Render the PDF upload tab."""
+    st.header("Upload PDF Document")
     
-    st.info("Upload multiple documents at once using CSV or JSON format.")
+    # Check if PDF processing is supported
+    features = health_data.get("features", [])
+    if "pdf_processing" not in features:
+        st.warning("PDF processing is not enabled on the API server. Please check your server configuration.")
+        st.info("To enable PDF processing, ensure your server has the required dependencies and GCS_BUCKET_NAME is set.")
+        return
     
-    file_format = st.radio("File Format:", ["CSV", "JSON"])
+    # File uploader with size limit note
+    st.info("Maximum file size: 100 MB")
+    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
     
-    if file_format == "CSV":
-        handle_csv_upload()
-    else:  # JSON format
-        handle_json_upload()
-
-
-def handle_csv_upload():
-    """Handle CSV batch upload."""
-    st.markdown("""
-    CSV should have these columns:
-    - `text` (required): The document content
-    - `source` (optional): Document source
-    - `category` (optional): Document category
-    - Any other columns will be included as metadata
-    """)
+    # Metadata
+    with st.expander("Add Metadata (Optional)", expanded=True):
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            source = st.text_input("Source:", placeholder="e.g., Company Report, Textbook, etc.", key="pdf_source")
+            author = st.text_input("Author:", placeholder="e.g., John Doe, Unknown, etc.")
+        
+        with col2:
+            category = st.text_input("Category:", placeholder="e.g., Technical, Financial, etc.", key="pdf_category")
+            year = st.text_input("Year:", placeholder="e.g., 2023")
     
-    sample_csv = """text,source,category
-"MongoDB is a document database with the scalability and flexibility that you want with the querying and indexing that you need.",Documentation,Database
-"MongoDB Atlas is the multi-cloud developer data platform that provides the database and services you need to accelerate to the cloud.",Product,Cloud"""
+    # Process upload button
+    process_button = st.button("🔍 Process PDF Document", use_container_width=True, disabled=uploaded_file is None)
     
-    st.code(sample_csv, language="csv")
-    
-    uploaded_file = st.file_uploader("Upload CSV file", type="csv")
-    
-    if uploaded_file is not None:
+    if process_button and uploaded_file is not None:
         try:
-            df = pd.read_csv(uploaded_file)
+            # Check file size (100 MB limit)
+            file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+            if file_size_mb > 100:
+                st.error(f"File size ({file_size_mb:.2f} MB) exceeds the 100 MB limit.")
+                return
+                
+            # Prepare metadata
+            metadata = {
+                "source": source if source else uploaded_file.name,
+                "category": category if category else "Uncategorized"
+            }
             
-            if "text" not in df.columns and "content" not in df.columns:
-                st.error("CSV must contain a 'text' or 'content' column")
-                logger.error("CSV upload missing required text/content column")
+            if author:
+                metadata["author"] = author
+            if year:
+                metadata["year"] = year
+            
+            # Create form data
+            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+            data = {"metadata": json.dumps(metadata)}
+            
+            with st.spinner("Processing PDF document..."):
+                logger.info(f"Processing PDF document: {uploaded_file.name} ({file_size_mb:.2f} MB)")
+                
+                # Make the API request with increased timeout for large files
+                response = requests.post(
+                    get_api_endpoint("documents/pdf"),
+                    files=files,
+                    data=data,
+                    timeout=600  # 10 minute timeout for large files
+                )
+                
+            if response.status_code == 201:
+                result = response.json()
+                st.markdown("<div class='success-box'>PDF document processed successfully!</div>", unsafe_allow_html=True)
+                st.info(f"Document: {result.get('document_name', uploaded_file.name)}")
+                st.info(f"Chunks processed: {result.get('chunks_count', 'Unknown')}")
+                
+                # Success message
+                st.success("Your PDF has been processed and is now searchable.")
+                logger.info(f"PDF document processed successfully: {uploaded_file.name}")
             else:
-                st.write(f"Found {len(df)} documents in CSV")
-                st.dataframe(df.head(5))
-                
-                if st.button("📤 Upload Batch", use_container_width=True):
-                    process_batch_upload_from_dataframe(df)
+                st.error(f"Error: {response.json().get('error', 'Unknown error')}")
+                logger.error(f"PDF processing error: {response.json().get('error')}")
+        except requests.exceptions.Timeout:
+            st.error("Request timed out. The PDF may be too large or complex to process.")
+            logger.error(f"PDF processing timeout for file: {uploaded_file.name}")
         except Exception as e:
-            st.error(f"Error processing CSV: {str(e)}")
-            logger.error(f"CSV processing error: {str(e)}")
+            st.error(f"Error: {str(e)}")
+            logger.error(f"PDF processing exception: {str(e)}")
 
 
-def handle_json_upload():
-    """Handle JSON batch upload."""
-    st.markdown("""
-    JSON should be an array of objects with:
-    - `text` or `content` (required): The document content
-    - `metadata` (optional): An object with metadata fields
-    """)
+def vaultgpt_tab(health_data):
+    """Render the VaultGPT tab for RAG operations."""
+    st.header("VaultGPT")
     
-    sample_json = """[
-  {
-    "text": "MongoDB is a document database with scalability and flexibility.",
-    "metadata": {
-      "source": "Documentation",
-      "category": "Database"
-    }
-  },
-  {
-    "content": "MongoDB Atlas is the multi-cloud developer data platform.",
-    "metadata": {
-      "source": "Product",
-      "category": "Cloud"
-    }
-  }
-]"""
+    # Check if VaultGPT is supported
+    features = health_data.get("features", [])
+    if "vaultgpt" not in features:
+        st.warning("VaultGPT is not enabled on the API server. Please check your server configuration.")
+        st.info("To enable VaultGPT, ensure your server has the required dependencies installed.")
+        return
     
-    st.code(sample_json, language="json")
+    # Initialize chat history in session state if not already present
+    if "vaultgpt_history" not in st.session_state:
+        st.session_state.vaultgpt_history = []
     
-    uploaded_file = st.file_uploader("Upload JSON file", type="json")
-    json_text = st.text_area("Or paste JSON here:", height=200, placeholder="Paste JSON array here...")
-    
-    json_data = None
-    
-    if uploaded_file is not None:
-        try:
-            json_data = json.load(uploaded_file)
-            logger.info(f"Loaded JSON file with {len(json_data)} items")
-        except Exception as e:
-            st.error(f"Error parsing JSON file: {str(e)}")
-            logger.error(f"JSON file parsing error: {str(e)}")
-    elif json_text:
-        try:
-            json_data = json.loads(json_text)
-            logger.info(f"Parsed JSON text with {len(json_data)} items")
-        except Exception as e:
-            st.error(f"Error parsing JSON text: {str(e)}")
-            logger.error(f"JSON text parsing error: {str(e)}")
-            
-    if json_data:
-        if not isinstance(json_data, list):
-            st.error("JSON must be an array of document objects")
-            logger.error("Invalid JSON format: not an array")
+    # Display chat history
+    for message in st.session_state.vaultgpt_history:
+        if message["role"] == "user":
+            st.markdown(f"<div class='message-container'><div class='user-message'>{message['content']}</div></div>", unsafe_allow_html=True)
         else:
-            st.write(f"Found {len(json_data)} documents in JSON")
+            # AI message with sources
+            ai_message = f"<div class='message-container'><div class='ai-message'>{message['content']}"
             
-            if st.button("📤 Upload Batch", use_container_width=True):
-                process_batch_upload(json_data)
-
-
-def process_batch_upload_from_dataframe(df: pd.DataFrame):
-    """
-    Process batch upload from pandas DataFrame.
-    
-    Args:
-        df: DataFrame containing documents to upload
-    """
-    documents = []
-    text_col = "text" if "text" in df.columns else "content"
-    
-    for _, row in df.iterrows():
-        doc = {text_col: row[text_col]}
-        
-        # Add all other columns as metadata
-        metadata = {}
-        for col in df.columns:
-            if col != text_col and not pd.isna(row[col]):
-                metadata[col] = row[col]
-        
-        if metadata:
-            doc["metadata"] = metadata
-        
-        documents.append(doc)
-    
-    process_batch_upload(documents)
-
-
-def process_batch_upload(documents: List[Dict[str, Any]]):
-    """
-    Process batch upload of documents.
-    
-    Args:
-        documents: List of document objects to upload
-    """
-    try:
-        with st.spinner(f"Uploading {len(documents)} documents..."):
-            logger.info(f"Batch uploading {len(documents)} documents")
-            response = requests.post(
-                get_api_endpoint("documents/batch"), 
-                json=documents
-            )
-            
-        if response.status_code in [200, 207]:
-            result = response.json()
-            st.markdown("<div class='success-box'>Batch upload completed!</div>", unsafe_allow_html=True)
-            st.write(result.get("message", ""))
-            
-            # Show detailed results
-            results = result.get("results", [])
-            success = len([r for r in results if r.get("status") == "success"])
-            errors = len([r for r in results if r.get("status") == "error"])
-            
-            st.write(f"✅ {success} documents added successfully")
-            logger.info(f"Batch upload: {success} succeeded, {errors} failed")
-            
-            if errors > 0:
-                st.write(f"❌ {errors} documents failed")
+            # Add sources if present
+            if "sources" in message and message["sources"]:
+                ai_message += "<div class='source-citation'>Sources: "
+                sources = []
+                for src in message["sources"]:
+                    source = src.get("source", "Unknown")
+                    page = src.get("page", "")
+                    page_info = f", p.{page}" if page else ""
+                    sources.append(f"{source}{page_info}")
                 
-                # Display errors
-                error_list = [r for r in results if r.get("status") == "error"]
-                if error_list:
-                    with st.expander("View Errors"):
-                        for i, err in enumerate(error_list[:10]):  # Show first 10 errors
-                            st.write(f"Error {i+1}: {err.get('errors') or err.get('message', 'Unknown error')}")
-                        
-                        if len(error_list) > 10:
-                            st.write(f"... and {len(error_list) - 10} more errors")
-        else:
-            st.error(f"Error: {response.json().get('error', 'Unknown error')}")
-            logger.error(f"Batch upload error: {response.json().get('error')}")
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
-        logger.error(f"Batch upload exception: {str(e)}")
+                ai_message += "; ".join(sources)
+                ai_message += "</div>"
+            
+            ai_message += "</div></div>"
+            st.markdown(ai_message, unsafe_allow_html=True)
+    
+    # User input
+    with st.form("vaultgpt_form", clear_on_submit=True):
+        user_input = st.text_area("Ask VaultGPT:", placeholder="What would you like to know?", key="vaultgpt_input")
+        col1, col2 = st.columns([1, 5])
+        
+        with col1:
+            top_n = st.number_input("Documents to retrieve:", min_value=1, max_value=10, value=3, step=1)
+        
+        submit_button = st.form_submit_button("🤖 Ask VaultGPT", use_container_width=True)
+    
+    # Clear chat button
+    if st.button("🗑️ Clear Chat History", use_container_width=True):
+        st.session_state.vaultgpt_history = []
+        st.rerun()
+    
+    if submit_button and user_input:
+        # Add user message to history
+        st.session_state.vaultgpt_history.append({
+            "role": "user",
+            "content": user_input
+        })
+        
+        try:
+            # Prepare payload
+            payload = {
+                "query": user_input,
+                "top_n": top_n
+            }
+            
+            with st.spinner("Thinking..."):
+                logger.info(f"VaultGPT query: {user_input}")
+                
+                # Make the API request
+                response = requests.post(
+                    get_api_endpoint("vaultgpt"),
+                    json=payload
+                )
+            
+            if response.status_code == 200:
+                result = response.json()
+                answer = result.get("answer", "I couldn't generate a response.")
+                documents = result.get("documents", [])
+                
+                # Extract sources for display
+                sources = []
+                for doc in documents:
+                    source = {
+                        "source": doc.get("metadata", {}).get("source", "Unknown"),
+                        "page": doc.get("metadata", {}).get("page", "")
+                    }
+                    sources.append(source)
+                
+                # Add AI response to history
+                st.session_state.vaultgpt_history.append({
+                    "role": "assistant",
+                    "content": answer,
+                    "sources": sources
+                })
+                
+                # Force rerun to update the UI
+                st.rerun()
+            else:
+                st.error(f"Error: {response.json().get('error', 'Unknown error')}")
+                logger.error(f"VaultGPT error: {response.json().get('error')}")
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+            logger.error(f"VaultGPT exception: {str(e)}")
 
 
 def display_sidebar_info():
@@ -454,17 +544,9 @@ def display_sidebar_info():
     with st.sidebar:
         st.markdown("---")
         st.subheader("About VectorVault")
-        st.write("A simple document search engine using vector embeddings for semantic search.")
+        st.write("A document search engine using vector embeddings for semantic search and RAG capabilities.")
         
-        st.markdown("---")
-        st.subheader("How it works")
-        st.markdown("""
-        1. **Upload** documents individually or in batch
-        2. Documents are converted to vector embeddings
-        3. **Search** using natural language
-        4. Results are ranked by semantic similarity
-        """)
-        
+        # Only display "How it works" section without showing features in sidebar
         st.markdown("---")
         st.caption("VectorVault - Knowledge, Instantly Retrieved")
         st.caption("Powered by OpenAI and FAISS")
@@ -473,22 +555,48 @@ def display_sidebar_info():
 def main():
     """Main application function."""
     display_header()
-    api_available = check_api_health()
+    api_available, health_data = check_api_health()
     
     if not api_available:
         st.warning("⚠️ API is not available. Some features may not work correctly.")
     
     # Tabs for different functions
-    tab1, tab2, tab3 = st.tabs(["Search", "Upload Documents", "Batch Upload"])
+    features = health_data.get("features", [])
     
-    with tab1:
+    # Create tabs for main functionality
+    tabs = []
+    
+    # Add Search tab
+    tabs.append("Search")
+    
+    # Add PDF Upload tab if available
+    if "pdf_processing" in features:
+        tabs.append("PDF Upload")
+    
+    # Add VaultGPT tab if available
+    if "vaultgpt" in features:
+        tabs.append("VaultGPT")
+    
+    # Create tabs
+    tab_containers = st.tabs(tabs)
+    
+    # Tab indexing
+    tab_index = 0
+    
+    # Search tab
+    with tab_containers[tab_index]:  # Search tab
         search_tab()
+    tab_index += 1
     
-    with tab2:
-        upload_tab()
+    # Optional tabs based on features
+    if "pdf_processing" in features:
+        with tab_containers[tab_index]:  # PDF Upload tab
+            pdf_upload_tab(health_data)
+        tab_index += 1
     
-    with tab3:
-        batch_upload_tab()
+    if "vaultgpt" in features:
+        with tab_containers[tab_index]:  # VaultGPT tab
+            vaultgpt_tab(health_data)
     
     display_sidebar_info()
 

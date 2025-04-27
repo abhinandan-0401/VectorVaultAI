@@ -4,4 +4,9 @@ faiss-cpu
 python-dotenv
 numpy
 google-cloud-storage
-gunicorn 
+gunicorn
+langchain
+langchain-openai
+langchain-community
+pypdf
+tiktoken 

@@ -2,7 +2,7 @@
 
 > Knowledge, Instantly Retrieved
 
-VectorVault is a semantic document search engine that uses OpenAI embeddings and FAISS vector database to provide powerful search capabilities.
+VectorVault is a semantic document search engine that uses OpenAI embeddings and FAISS vector database to provide powerful search capabilities with RAG (Retrieval Augmented Generation).
 
 <div align="center">
   <img src="ui/app_logo.png" alt="VectorVault Logo" width="300"/>
@@ -11,12 +11,12 @@ VectorVault is a semantic document search engine that uses OpenAI embeddings and
 ## Features
 
 - 🔍 **Semantic Search**: Find documents based on meaning, not just keywords
-- 📄 **Document Management**: Add documents individually with rich metadata
-- 📚 **Batch Processing**: Upload multiple documents via CSV or JSON files
-- 🧠 **AI-Powered**: OpenAI embeddings for state-of-the-art semantic understanding
-- 💾 **Persistent Storage**: Local or Google Cloud Storage for vector indices and metadata
+- 📑 **PDF Processing**: Upload and process PDF files up to 100MB with automatic chunking
+- 🤖 **VaultGPT**: AI-powered chat interface that uses RAG to answer questions based on your documents 
+- 🧠 **OpenAI Integration**: Leverages text-embedding-3-small for embeddings and GPT-4o for RAG
+- 💾 **Persistent Storage**: Google Cloud Storage for vector indices, metadata, and PDF files
 - 🌐 **REST API**: Simple HTTP endpoints for integration
-- 🖥️ **Streamlit UI**: User-friendly interface with immediate visual feedback
+- 🖥️ **Streamlit UI**: User-friendly interface with dark mode support
 - 🐳 **Docker Ready**: Containerized deployment for both development and production
 
 ## Table of Contents
@@ -33,9 +33,9 @@ VectorVault is a semantic document search engine that uses OpenAI embeddings and
   - [Folder-Based Deployment](#folder-based-deployment)
   - [Google Cloud Run](#google-cloud-run)
 - [Usage](#usage)
-  - [Adding Documents](#adding-documents)
-  - [Batch Upload](#batch-upload)
+  - [Uploading PDF Documents](#uploading-pdf-documents)
   - [Searching Documents](#searching-documents)
+  - [Using VaultGPT](#using-vaultgpt)
 - [API Documentation](#api-documentation)
 - [Project Structure](#project-structure)
 - [Testing](#testing)
@@ -73,18 +73,19 @@ VectorVault is a semantic document search engine that uses OpenAI embeddings and
 
 3. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install -r api/requirements.txt  # For API
+   pip install -r ui/requirements.txt   # For UI
    ```
 
 ### Configuration
 
-Create a `.env` file with your OpenAI API key:
+Create a `.env` file with your OpenAI API key and other settings:
 
 ```
 OPENAI_API_KEY=your-openai-api-key-here
 EMBEDDING_MODEL=text-embedding-3-small
 LLM=gpt-4o
-GCS_BUCKET_NAME=your-bucket-name  # Optional, for GCS storage
+GCS_BUCKET_NAME=your-GCS-bucket-name  # Required for PDF processing and storage
 ```
 
 ## Running the Application
@@ -93,12 +94,14 @@ GCS_BUCKET_NAME=your-bucket-name  # Optional, for GCS storage
 
 1. Start the Flask API backend:
    ```bash
+   cd api
    python app.py
    ```
    This starts the API server on `http://localhost:5000`.
 
-2. Start the Streamlit UI:
+2. Start the Streamlit UI in a separate terminal:
    ```bash
+   cd ui
    streamlit run streamlit_app.py
    ```
    Access the UI at `http://localhost:8501`.
@@ -108,13 +111,13 @@ GCS_BUCKET_NAME=your-bucket-name  # Optional, for GCS storage
 Build and run the API:
 ```bash
 docker build -t vector-vault-api -f api/Dockerfile api/
-docker run -p 8080:8080 -e OPENAI_API_KEY=your-key vector-vault-api
+docker run -p 5000:5000 -e OPENAI_API_KEY=your-key -e GCS_BUCKET_NAME=your-GCS-bucket-name vector-vault-api
 ```
 
 Build and run the UI:
 ```bash
 docker build -t vector-vault-ui -f ui/Dockerfile ui/
-docker run -p 8501:8501 -e API_URL=http://localhost:8080 vector-vault-ui
+docker run -p 8501:8501 -e API_URL=http://localhost:5000 vector-vault-ui
 ```
 
 ### Using Docker Compose
@@ -150,21 +153,36 @@ For detailed deployment instructions, see [FOLDER_DEPLOYMENT.md](FOLDER_DEPLOYME
 
 Deploy to Google Cloud Run using the folder-based approach:
 
-1. Deploy the API:
+1. Create a GCS bucket for storing data:
+   ```bash
+   gcloud storage buckets create gs://your-GCS-bucket-name --location=$REGION --project=$PROJECT_ID
+   ```
+
+2. Deploy the API:
    ```bash
    cd api
-   gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/vector-vault-api .
-   gcloud run deploy vector-vault-api --image gcr.io/YOUR_PROJECT_ID/vector-vault-api --platform managed --allow-unauthenticated --set-env-vars="OPENAI_API_KEY=your-key,GCS_BUCKET_NAME=your-bucket"
+   gcloud builds submit --tag gcr.io/$PROJECT_ID/vectorvault-advanced-api .
+   gcloud run deploy vectorvault-advanced-api \
+     --image gcr.io/$PROJECT_ID/vectorvault-advanced-api \
+     --platform managed \
+     --region $REGION \
+     --allow-unauthenticated \
+     --set-env-vars="OPENAI_API_KEY=your-key,GCS_BUCKET_NAME=your-GCS-bucket-name"
    cd ..
    ```
 
-2. Get the API URL and deploy the UI:
+3. Get the API URL and deploy the UI:
    ```bash
-   $API_URL = (gcloud run services describe vector-vault-api --region=your-region --platform managed --format="value(status.url)")
+   API_URL=$(gcloud run services describe vectorvault-advanced-api --region=$REGION --platform managed --format="value(status.url)")
    
    cd ui
-   gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/vector-vault-ui .
-   gcloud run deploy vector-vault-ui --image gcr.io/YOUR_PROJECT_ID/vector-vault-ui --platform managed --allow-unauthenticated --set-env-vars="API_URL=$API_URL"
+   gcloud builds submit --tag gcr.io/$PROJECT_ID/vectorvault-advanced-ui .
+   gcloud run deploy vectorvault-advanced-ui \
+     --image gcr.io/$PROJECT_ID/vectorvault-advanced-ui \
+     --platform managed \
+     --region $REGION \
+     --allow-unauthenticated \
+     --set-env-vars="API_URL=$API_URL"
    cd ..
    ```
 
@@ -172,85 +190,79 @@ For detailed GCP deployment instructions, see [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT
 
 ## Usage
 
-### Adding Documents
+### Uploading PDF Documents
 
 1. Open the Streamlit UI 
-2. Navigate to the "Upload Documents" tab
-3. Enter your document text and metadata
-4. Click "Upload Document"
+2. Navigate to the "PDF Upload" tab
+3. Select a PDF file (up to 100MB)
+4. Add optional metadata like source, author, category, and year
+5. Click "Process PDF Document"
 
-### Batch Upload
-
-Upload multiple documents using CSV or JSON format:
-
-#### CSV Format
-
-```csv
-text,source,category,author
-"MongoDB uses BSON, a binary representation of JSON documents.",MongoDB Docs,Technical,MongoDB Team
-```
-
-#### JSON Format
-
-```json
-[
-  {
-    "text": "Your document content here",
-    "metadata": {
-      "source": "Wikipedia",
-      "category": "Science"
-    }
-  }
-]
-```
-
-Sample files are available in the `sample_data/` directory.
+The system will:
+- Split the PDF into semantic chunks
+- Generate embeddings for each chunk
+- Store both the PDF and its metadata in Google Cloud Storage
+- Index the chunks for semantic search
 
 ### Searching Documents
 
 1. Navigate to the "Search" tab
 2. Enter your search query
 3. Set the number of results to return
-4. Click "Search"
+4. Toggle "Group results by source" if desired
+5. Click "Search"
 
-Results are ranked by semantic similarity, not just keyword matching.
+Results are ranked by semantic similarity, showing the most relevant content first.
+
+### Using VaultGPT
+
+1. Navigate to the "VaultGPT" tab
+2. Enter your question in the text area
+3. Set the number of documents to retrieve as context
+4. Click "Ask VaultGPT"
+
+VaultGPT will:
+- Retrieve the most relevant document chunks
+- Use them as context for generating an AI response
+- Display the answer with citations to the source documents
 
 ## API Documentation
 
 ### Health Check
-- `GET /health` - Check system status
+- `GET /health` - Check system status and view supported features
 
 ### Document Management
-- `POST /documents` - Add a single document
-- `POST /documents/batch` - Add multiple documents
+- `POST /documents/pdf` - Upload and process a PDF document (up to 100MB)
 
 ### Search
 - `GET /search?q=your+query+here&n=5` - Search for documents
   - `q` or `query`: The search query (required)
   - `n`: Number of results to return (optional, defaults to 5)
+  - `group`: Group results by source (optional, defaults to false)
+
+### VaultGPT
+- `POST /vaultgpt` - Query the RAG system
+  - Request body: `{"query": "your question", "top_n": 5}`
 
 ## Project Structure
 
 ```
 vectorvault/
-├── api/                     # API component for folder-based deployment
+├── api/                     # API component for deployment
 │   ├── app.py               # Flask API backend
+│   ├── pdf_processor.py     # PDF processing utility
+│   ├── rag_processor.py     # RAG implementation
 │   ├── Dockerfile           # API container definition
 │   ├── requirements.txt     # API dependencies
 │   └── app_logo.png         # Application logo
-├── ui/                      # UI component for folder-based deployment
+├── ui/                      # UI component for deployment
 │   ├── streamlit_app.py     # Streamlit frontend
 │   ├── Dockerfile           # UI container definition
 │   ├── requirements.txt     # UI dependencies
 │   └── app_logo.png         # Application logo
-├── app.py                   # Flask API (original)
-├── streamlit_app.py         # Streamlit UI (original)
 ├── docker-compose.yml       # Docker Compose configuration
 ├── setup_folders.ps1        # PowerShell setup script
 ├── setup_folders.sh         # Bash setup script
-├── sample_data/             # Example data for testing
-│   ├── mongodb_docs.csv     # Sample CSV data
-│   └── mongodb_features.json # Sample JSON data
 ├── FOLDER_DEPLOYMENT.md     # Folder-based deployment guide
 ├── GCP_DEPLOYMENT.md        # Google Cloud Platform deployment guide
 ├── README.md                # This documentation

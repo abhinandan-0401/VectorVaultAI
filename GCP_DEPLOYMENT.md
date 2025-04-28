@@ -18,6 +18,53 @@ In our deployment, both Flask and Streamlit run in the same container, managed b
 3. A Google Cloud Platform account with billing enabled
 4. OpenAI API key for generating embeddings
 
+## MongoDB Atlas Configuration
+
+1. Create a MongoDB Atlas account at [https://www.mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
+2. Create a new cluster (M0 free tier is sufficient for testing)
+3. Configure database access:
+   - Create a database user with read/write permissions
+   - Store credentials securely
+4. Configure network access:
+   - Add your IP address for development
+   - For production, allow access from anywhere (0.0.0.0/0) or specific GCP IP ranges
+
+5. Get your connection string:
+   ```
+   mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority
+   ```
+
+### Environment Variables for Authentication
+
+Add these environment variables to your Cloud Run services:
+
+
+#### MongoDB Configuration
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority
+MONGODB_DATABASE=vectorvault
+
+#### JWT Authentication
+JWT_SECRET_KEY=your-secret-key-here  # Generate a secure random key
+JWT_ACCESS_TOKEN_EXPIRES=86400  # 24 hours in seconds
+
+#### Admin User Setup (First Run Only)
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=secure-initial-password
+ADMIN_EMAIL=admin@example.com
+
+### Update Cloud Run Deployment
+
+Update memory allocation for the API service to handle vector search:
+
+gcloud run deploy vectorvault-advanced-api \
+  --image gcr.io/$PROJECT_ID/vectorvault-advanced-api \
+  --platform managed \
+  --region $REGION \
+  --allow-unauthenticated \
+  --memory 4Gi \  # Increased from 2Gi
+  --cpu 2 \        # Increased from 1
+  --set-env-vars="OPENAI_API_KEY=your-key,GCS_BUCKET_NAME=your-GCS-bucket-name,MONGODB_URI=your-mongodb-uri,MONGODB_DATABASE=vectorvault,JWT_SECRET_KEY=your-secret-key"
+ 
 ## Setup Google Cloud Resources
 
 ### Create a Cloud Storage Bucket

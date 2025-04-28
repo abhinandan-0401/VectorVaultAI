@@ -4,4 +4,6 @@ pandas
 python-dotenv
 Pillow
 matplotlib
-pyarrow 
+pyarrow
+streamlit-authenticator
+pyjwt

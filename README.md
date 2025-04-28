@@ -188,6 +188,61 @@ Deploy to Google Cloud Run using the folder-based approach:
 
 For detailed GCP deployment instructions, see [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md).
 
+## Authentication & Authorization
+
+VectorVault now supports user authentication and role-based access control (RBAC) with three user roles:
+
+1. **Admin**: Full access to all features, user management, system settings
+2. **Editor**: Can upload documents, search, and use VaultGPT
+3. **Reader**: Can only search and use VaultGPT, cannot upload documents
+
+### Default Admin Account
+
+On first startup, the system creates a default admin account using the environment variables:
+- `ADMIN_USERNAME`: Admin username (default: admin)
+- `ADMIN_PASSWORD`: Admin password (default: change-me-immediately)
+- `ADMIN_EMAIL`: Admin email (default: admin@example.com)
+
+### Role Permissions
+
+| Feature | Admin | Editor | Reader |
+|---------|-------|--------|--------|
+| Search Documents | ✅ | ✅ | ✅ |
+| Use VaultGPT | ✅ | ✅ | ✅ |
+| Upload Documents | ✅ | ✅ | ❌ |
+| User Management | ✅ | ❌ | ❌ |
+| System Settings | ✅ | ❌ | ❌ |
+
+## Conversation History
+
+VaultGPT now maintains conversation history to provide more contextual responses. Key features:
+
+- Persistent conversations stored in MongoDB
+- Context-aware responses that reference previous exchanges
+- Ability to manage and switch between multiple conversations
+- Source citations for better transparency
+
+## MongoDB Atlas Integration
+
+VectorVault now uses MongoDB Atlas for scalable document and vector storage:
+
+- Vector search capabilities for semantic document retrieval
+- Conversation history storage
+- User authentication and management
+- Document metadata and organization
+
+### MongoDB Configuration
+
+To configure MongoDB Atlas:
+
+1. Set the following environment variables:
+   ```
+   MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority
+   MONGODB_DATABASE=vectorvault
+   ```
+
+2. On first run, the system will create necessary collections and indexes
+
 ## Usage
 
 ### Uploading PDF Documents
@@ -248,25 +303,32 @@ VaultGPT will:
 
 ```
 vectorvault/
-├── api/                     # API component for deployment
-│   ├── app.py               # Flask API backend
-│   ├── pdf_processor.py     # PDF processing utility
-│   ├── rag_processor.py     # RAG implementation
-│   ├── Dockerfile           # API container definition
-│   ├── requirements.txt     # API dependencies
-│   └── app_logo.png         # Application logo
-├── ui/                      # UI component for deployment
-│   ├── streamlit_app.py     # Streamlit frontend
-│   ├── Dockerfile           # UI container definition
-│   ├── requirements.txt     # UI dependencies
-│   └── app_logo.png         # Application logo
-├── docker-compose.yml       # Docker Compose configuration
-├── setup_folders.ps1        # PowerShell setup script
-├── setup_folders.sh         # Bash setup script
-├── FOLDER_DEPLOYMENT.md     # Folder-based deployment guide
-├── GCP_DEPLOYMENT.md        # Google Cloud Platform deployment guide
-├── README.md                # This documentation
-└── LICENSE                  # MIT License
+
+├── api/ # API component for deployment
+│ ├── app.py # Flask API backend
+│ ├── auth.py # Authentication and RBAC
+│ ├── mongodb.py # MongoDB connection and setup
+│ ├── models.py # Data models and schemas
+│ ├── conversations.py # Conversation management
+│ ├── pdf_processor.py # PDF processing utility
+│ ├── rag_processor.py # RAG implementation
+│ ├── Dockerfile # API container definition
+│ ├── requirements.txt # API dependencies
+│ └── app_logo.png # Application logo
+├── ui/ # UI component for deployment
+│ ├── streamlit_app.py # Streamlit frontend
+│ ├── auth_components.py # Authentication UI components
+│ ├── conversation_components.py # Conversation UI components
+│ ├── Dockerfile # UI container definition
+│ ├── requirements.txt # UI dependencies
+│ └── app_logo.png # Application logo
+├── docker-compose.yml # Docker Compose configuration
+├── setup_folders.ps1 # PowerShell setup script
+├── setup_folders.sh # Bash setup script
+├── FOLDER_DEPLOYMENT.md # Folder-based deployment guide
+├── GCP_DEPLOYMENT.md # Google Cloud Platform deployment guide
+├── README.md # Documentation
+└── LICENSE # MIT License
 ```
 
 ## Testing

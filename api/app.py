@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-VectorVault API - A document search engine using vector embeddings
-"""
-
 import json
 import logging
 import os
@@ -10,15 +5,21 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
 import tempfile
+from datetime import datetime
 
-import faiss
 import numpy as np
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, g
 from google.cloud import storage
 from openai import OpenAI
 from werkzeug.utils import secure_filename
+from bson.objectid import ObjectId
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
+# Import custom modules
+from mongodb import initialize_mongodb
+from auth import init_auth, role_required, register_user, authenticate_user, get_current_user, get_current_user_id
+from conversations import ConversationManager
 from pdf_processor import PDFProcessor
 from rag_processor import RAGProcessor
 
@@ -37,9 +38,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or "text-embedding-3-small"
 LLM = os.getenv("LLM") or "gpt-4o"
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
-EMBEDDING_DIM = 1536  # for OpenAI text-embedding-3-small
-INDEX_FILE = "faiss_index.index"
-METADATA_FILE = "document_metadata.json"
 ALLOWED_EXTENSIONS = {'pdf'}  # Only allow PDF uploads
 
 # Initialize the OpenAI client
@@ -56,111 +54,38 @@ if GCS_BUCKET_NAME:
     bucket = storage_client.bucket(GCS_BUCKET_NAME)
     logger.info(f"Connected to GCS bucket: {GCS_BUCKET_NAME}")
 else:
-    logger.warning("GCS_BUCKET_NAME not set. Using local file storage only.")
+    logger.warning("GCS_BUCKET_NAME not set. PDF upload will not be available.")
 
 # Flask app
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # Limit uploads to 100MB
 
-# Document storage (FAISS only stores vectors, we need to keep metadata separately)
-doc_store: Dict[int, Dict[str, Any]] = {}
+# Initialize MongoDB
+db = initialize_mongodb()
+
+# Initialize Auth
+init_auth(app, db)
+
+# Initialize conversation manager
+conversation_manager = ConversationManager(db)
 
 # Initialize processors
 pdf_processor = None
 rag_processor = None
 
-
-def load_index() -> None:
-    """
-    Load or initialize FAISS index and document metadata from GCS or local storage.
-    
-    Sets global variables 'index' and 'doc_store'.
-    """
-    global index, doc_store, pdf_processor, rag_processor
-    
-    # Try to load from GCS first if configured
-    if bucket:
-        index_blob = bucket.blob(INDEX_FILE)
-        metadata_blob = bucket.blob(METADATA_FILE)
-        
-        # Check if index exists in GCS
-        if index_blob.exists():
-            try:
-                # Download index from GCS to local temp file
-                index_blob.download_to_filename(INDEX_FILE)
-                logger.info(f"Downloaded FAISS index from GCS bucket {GCS_BUCKET_NAME}")
-                
-                # Load index from local file
-                index = faiss.read_index(INDEX_FILE)
-                logger.info(f"FAISS index loaded with {index.ntotal} vectors.")
-            except Exception as e:
-                logger.error(f"Error loading FAISS index from GCS: {str(e)}. Creating new index.")
-                index = faiss.IndexFlatL2(EMBEDDING_DIM)
-        else:
-            logger.info(f"No FAISS index found in GCS bucket {GCS_BUCKET_NAME}. Creating new index.")
-            index = faiss.IndexFlatL2(EMBEDDING_DIM)
-        
-        # Check if metadata exists in GCS
-        if metadata_blob.exists():
-            try:
-                # Download metadata from GCS to local temp file
-                metadata_blob.download_to_filename(METADATA_FILE)
-                logger.info(f"Downloaded document metadata from GCS bucket {GCS_BUCKET_NAME}")
-                
-                # Load metadata from local file
-                with open(METADATA_FILE, 'r') as f:
-                    doc_store = json.load(f)
-                    # Convert string keys back to integers
-                    doc_store = {int(k): v for k, v in doc_store.items()}
-                logger.info(f"Loaded {len(doc_store)} documents from metadata file.")
-            except Exception as e:
-                logger.error(f"Error loading document metadata from GCS: {str(e)}. Starting with empty store.")
-        else:
-            logger.info(f"No document metadata found in GCS bucket {GCS_BUCKET_NAME}. Starting with empty store.")
-    else:
-        # Fall back to local files if GCS not configured
-        if os.path.exists(INDEX_FILE):
-            try:
-                index = faiss.read_index(INDEX_FILE)
-                logger.info(f"FAISS index loaded from local disk with {index.ntotal} vectors.")
-            except Exception as e:
-                logger.error(f"Error loading local FAISS index: {str(e)}. Creating new index.")
-                index = faiss.IndexFlatL2(EMBEDDING_DIM)
-        else:
-            index = faiss.IndexFlatL2(EMBEDDING_DIM)
-            logger.info("Initialized new FAISS index.")
-
-        # Load document metadata if exists locally
-        if os.path.exists(METADATA_FILE):
-            try:
-                with open(METADATA_FILE, 'r') as f:
-                    doc_store = json.load(f)
-                    # Convert string keys back to integers
-                    doc_store = {int(k): v for k, v in doc_store.items()}
-                logger.info(f"Loaded {len(doc_store)} documents from local metadata file.")
-            except Exception as e:
-                logger.error(f"Error loading local document metadata: {str(e)}. Starting with empty store.")
-    
-    # Initialize the PDF processor if GCS is configured
-    if GCS_BUCKET_NAME:
-        pdf_processor = PDFProcessor(
-            openai_api_key=OPENAI_API_KEY,
-            embedding_model=EMBEDDING_MODEL,
-            gcs_bucket_name=GCS_BUCKET_NAME
-        )
-    
-    # Initialize the RAG processor
-    rag_processor = RAGProcessor(
+if GCS_BUCKET_NAME:
+    pdf_processor = PDFProcessor(
         openai_api_key=OPENAI_API_KEY,
-        llm_model=LLM,
-        index=index,
-        doc_store=doc_store
+        embedding_model=EMBEDDING_MODEL,
+        gcs_bucket_name=GCS_BUCKET_NAME,
+        db=db
     )
 
-
-# Initialize index and doc_store
-load_index()
-
+rag_processor = RAGProcessor(
+    openai_api_key=OPENAI_API_KEY,
+    llm_model=LLM,
+    db=db
+)
 
 def get_embedding(text: str) -> np.ndarray:
     """
@@ -184,36 +109,6 @@ def get_embedding(text: str) -> np.ndarray:
     except Exception as e:
         logger.error(f"Error generating embedding: {str(e)}")
         raise ValueError(f"Failed to generate embedding: {str(e)}")
-
-
-def save_data() -> None:
-    """
-    Save document metadata and index to disk and GCS if configured.
-    """
-    try:
-        # Save metadata locally first
-        with open(METADATA_FILE, 'w') as f:
-            json.dump(doc_store, f)
-        logger.info(f"Saved {len(doc_store)} documents to local metadata file.")
-        
-        # Save index locally
-        faiss.write_index(index, INDEX_FILE)
-        logger.info(f"Saved FAISS index with {index.ntotal} vectors to local file.")
-        
-        # Upload to GCS if configured
-        if bucket:
-            # Upload metadata
-            metadata_blob = bucket.blob(METADATA_FILE)
-            metadata_blob.upload_from_filename(METADATA_FILE)
-            logger.info(f"Uploaded document metadata to GCS bucket {GCS_BUCKET_NAME}")
-            
-            # Upload index
-            index_blob = bucket.blob(INDEX_FILE)
-            index_blob.upload_from_filename(INDEX_FILE)
-            logger.info(f"Uploaded FAISS index to GCS bucket {GCS_BUCKET_NAME}")
-    except Exception as e:
-        logger.error(f"Error saving data: {str(e)}")
-
 
 def validate_document(doc_data: Dict[str, Any]) -> List[str]:
     """
@@ -239,7 +134,6 @@ def validate_document(doc_data: Dict[str, Any]) -> List[str]:
     
     return errors
 
-
 def allowed_file(filename: str) -> bool:
     """
     Check if a file has an allowed extension.
@@ -252,17 +146,257 @@ def allowed_file(filename: str) -> bool:
     """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
 @app.route('/logo')
 def get_logo():
     """Serve the app logo."""
     return send_file('app_logo.png', mimetype='image/png')
 
+# Authentication routes
+@app.route('/auth/register', methods=['POST'])
+def register():
+    try:
+        data = request.get_json(force=True)
+        
+        # Validate input
+        username = data.get("username")
+        password = data.get("password")
+        email = data.get("email")
+        
+        if not username or not password or not email:
+            return jsonify({"error": "Username, password, and email are required"}), 400
+        
+        # Only admins can assign roles
+        role = "reader"  # Default role
+        
+        # Check if user is admin and wants to assign a role
+        user_id = get_current_user_id()
+        if user_id:
+            user = db.users.find_one({"_id": ObjectId(user_id)})
+            if user and user.get("role") == "admin" and "role" in data:
+                role = data.get("role")
+        
+        # Register user
+        user, error = register_user(db, username, password, email, role)
+        
+        if error:
+            return jsonify({"error": error}), 400
+        
+        return jsonify({"message": "User registered successfully", "user": user}), 201
+    
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        return jsonify({"error": f"Registration failed: {str(e)}"}), 500
 
+@app.route('/auth/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json(force=True)
+        
+        # Validate input
+        username = data.get("username")
+        password = data.get("password")
+        
+        if not username or not password:
+            return jsonify({"error": "Username and password are required"}), 400
+        
+        # Authenticate user
+        token, user, error = authenticate_user(db, username, password)
+        
+        if error:
+            return jsonify({"error": error}), 401
+        
+        return jsonify({
+            "token": token,
+            "user": user
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return jsonify({"error": f"Login failed: {str(e)}"}), 500
+
+@app.route('/auth/user', methods=['GET'])
+@jwt_required()
+def get_user():
+    """Get the current user's information"""
+    try:
+        user = get_current_user(db)
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        return jsonify(user), 200
+    
+    except Exception as e:
+        logger.error(f"Get user error: {str(e)}")
+        return jsonify({"error": f"Failed to get user: {str(e)}"}), 500
+
+@app.route('/auth/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    """Revoke the current token"""
+    try:
+        jti = get_jwt()["jti"]
+        db.revoked_tokens.insert_one({
+            "jti": jti,
+            "created_at": datetime.utcnow()
+        })
+        
+        return jsonify({"message": "Successfully logged out"}), 200
+    
+    except Exception as e:
+        logger.error(f"Logout error: {str(e)}")
+        return jsonify({"error": f"Failed to logout: {str(e)}"}), 500
+
+# User management routes (admin only)
+@app.route('/admin/users', methods=['GET'])
+@role_required(["admin"])
+def get_users():
+    """Get all users (admin only)"""
+    try:
+        users = list(db.users.find({}, {
+            "password": 0  # Exclude password
+        }))
+        
+        # Convert ObjectId to string
+        for user in users:
+            user["id"] = str(user.pop("_id"))
+            if "created_at" in user:
+                user["created_at"] = user["created_at"].isoformat()
+            if "last_login" in user and user["last_login"]:
+                user["last_login"] = user["last_login"].isoformat()
+        
+        return jsonify(users), 200
+    
+    except Exception as e:
+        logger.error(f"Get users error: {str(e)}")
+        return jsonify({"error": f"Failed to get users: {str(e)}"}), 500
+
+@app.route('/admin/users', methods=['POST'])
+@role_required(["admin"])
+def create_user():
+    """Create a new user (admin only)"""
+    try:
+        data = request.get_json(force=True)
+        
+        # Validate input
+        username = data.get("username")
+        password = data.get("password")
+        email = data.get("email")
+        role = data.get("role", "reader")
+        
+        if not username or not password or not email:
+            return jsonify({"error": "Username, password, and email are required"}), 400
+        
+        # Create user
+        user, error = register_user(db, username, password, email, role)
+        
+        if error:
+            return jsonify({"error": error}), 400
+        
+        return jsonify({"message": "User created successfully", "user": user}), 201
+    
+    except Exception as e:
+        logger.error(f"Create user error: {str(e)}")
+        return jsonify({"error": f"Failed to create user: {str(e)}"}), 500
+
+@app.route('/admin/users/<user_id>', methods=['PUT'])
+@role_required(["admin"])
+def update_user(user_id):
+    """Update a user (admin only)"""
+    try:
+        data = request.get_json(force=True)
+        
+        # Fields that can be updated
+        update_fields = {}
+        
+        if "email" in data:
+            update_fields["email"] = data["email"]
+        
+        if "role" in data:
+            update_fields["role"] = data["role"]
+        
+        if "password" in data:
+            import bcrypt
+            update_fields["password"] = bcrypt.hashpw(data["password"].encode('utf-8'), bcrypt.gensalt())
+        
+        if not update_fields:
+            return jsonify({"error": "No fields to update"}), 400
+        
+        # Update the user
+        result = db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": update_fields}
+        )
+        
+        if result.modified_count == 0:
+            return jsonify({"error": "User not found or no changes made"}), 404
+        
+        return jsonify({"message": "User updated successfully"}), 200
+    
+    except Exception as e:
+        logger.error(f"Update user error: {str(e)}")
+        return jsonify({"error": f"Failed to update user: {str(e)}"}), 500
+
+@app.route('/admin/users/<user_id>', methods=['DELETE'])
+@role_required(["admin"])
+def delete_user(user_id):
+    """Delete a user (admin only)"""
+    try:
+        # Don't allow deleting yourself
+        current_user_id = get_current_user_id()
+        if current_user_id == user_id:
+            return jsonify({"error": "Cannot delete your own account"}), 400
+        
+        # Delete the user
+        result = db.users.delete_one({"_id": ObjectId(user_id)})
+        
+        if result.deleted_count == 0:
+            return jsonify({"error": "User not found"}), 404
+        
+        return jsonify({"message": "User deleted successfully"}), 200
+    
+    except Exception as e:
+        logger.error(f"Delete user error: {str(e)}")
+        return jsonify({"error": f"Failed to delete user: {str(e)}"}), 500
+
+# Conversation routes
+@app.route('/conversations', methods=['GET'])
+@jwt_required()
+def get_conversations():
+    """Get all conversations for the current user"""
+    try:
+        user_id = get_current_user_id()
+        conversations = conversation_manager.get_user_conversations(user_id)
+        
+        return jsonify(conversations), 200
+    
+    except Exception as e:
+        logger.error(f"Get conversation error: {str(e)}")
+        return jsonify({"error": f"Failed to get conversation: {str(e)}"}), 500
+
+@app.route('/conversations/<conversation_id>', methods=['DELETE'])
+@jwt_required()
+def delete_conversation(conversation_id):
+    """Delete a conversation"""
+    try:
+        user_id = get_current_user_id()
+        success = conversation_manager.delete_conversation(conversation_id, user_id)
+        
+        if not success:
+            return jsonify({"error": "Conversation not found or could not be deleted"}), 404
+        
+        return jsonify({"message": "Conversation deleted successfully"}), 200
+    
+    except Exception as e:
+        logger.error(f"Delete conversation error: {str(e)}")
+        return jsonify({"error": f"Failed to delete conversation: {str(e)}"}), 500
+
+# Document management routes
 @app.route('/documents', methods=['POST'])
+@role_required(["admin", "editor"])
 def add_document():
     """
-    Add a document to the index.
+    Add a document to MongoDB.
     
     Request Body:
         JSON object with:
@@ -284,25 +418,25 @@ def add_document():
         text = data.get("text") or data.get("content")
         metadata = data.get("metadata", {})
         doc_id = data.get("id", str(uuid.uuid4()))
+        user_id = get_current_user_id()
 
-        # Create embedding and add to index
+        # Create embedding
         embedding = get_embedding(text)
-        index.add(np.array([embedding]))
         
-        # Store document reference
-        idx = index.ntotal - 1
-        doc_store[idx] = {
-            "id": doc_id,
+        # Store document in MongoDB
+        document = {
             "text": text,
+            "embedding": embedding,
             "metadata": metadata,
-            "added_at": time.time()
+            "user_id": user_id,
+            "created_at": datetime.utcnow()
         }
-
-        # Persist data
-        save_data()
-
-        logger.info(f"Document added with ID: {doc_id}")
-        return jsonify({"message": "Document added", "id": doc_id}), 201
+        
+        result = db.documents.insert_one(document)
+        inserted_id = str(result.inserted_id)
+        
+        logger.info(f"Document added with ID: {inserted_id}")
+        return jsonify({"message": "Document added", "id": inserted_id}), 201
     
     except ValueError as ve:
         logger.warning(f"Validation error: {str(ve)}")
@@ -311,11 +445,11 @@ def add_document():
         logger.error(f"Error adding document: {str(e)}")
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-
 @app.route('/documents/pdf', methods=['POST'])
+@role_required(["admin", "editor"])
 def add_pdf_document():
     """
-    Add a PDF document to the index.
+    Add a PDF document, process chunks, and store in MongoDB.
     
     Request Body:
         Multipart form data with:
@@ -352,39 +486,33 @@ def add_pdf_document():
                 except:
                     logger.warning("Failed to parse metadata JSON, using empty metadata")
             
+            # Get current user ID
+            user_id = get_current_user_id()
+            
             # Process the PDF
             file_content = file.read()
             filename = secure_filename(file.filename)
             
             # Process the PDF to get chunks and embeddings
-            embedded_chunks, chunk_metadata = pdf_processor.process_pdf(file_content, filename)
+            chunks_count, document_id = pdf_processor.process_pdf(
+                file_content, 
+                filename, 
+                user_id=user_id
+            )
             
-            # Add additional metadata if provided
-            for chunk in chunk_metadata:
-                chunk["metadata"].update(additional_metadata)
+            # Update PDF document metadata
+            if additional_metadata:
+                db.pdf_documents.update_one(
+                    {"document_id": document_id},
+                    {"$set": {"metadata": additional_metadata}}
+                )
             
-            # Add chunks to index
-            embeddings = np.array([chunk["embedding"] for chunk in embedded_chunks])
-            index.add(embeddings)
-            
-            # Store document references
-            start_idx = index.ntotal - len(embedded_chunks)
-            for i, chunk in enumerate(chunk_metadata):
-                doc_store[start_idx + i] = {
-                    "id": chunk["id"],
-                    "text": chunk["text"],
-                    "metadata": chunk["metadata"],
-                    "added_at": time.time()
-                }
-            
-            # Persist data
-            save_data()
-            
-            logger.info(f"PDF document {filename} processed and added with {len(embedded_chunks)} chunks")
+            logger.info(f"PDF document {filename} processed and added with {chunks_count} chunks")
             return jsonify({
-                "message": f"PDF document processed with {len(embedded_chunks)} chunks",
+                "message": f"PDF document processed with {chunks_count} chunks",
                 "document_name": filename,
-                "chunks_count": len(embedded_chunks)
+                "document_id": document_id,
+                "chunks_count": chunks_count
             }), 201
         else:
             return jsonify({"error": f"File type not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"}), 400
@@ -393,11 +521,11 @@ def add_pdf_document():
         logger.error(f"Error processing PDF document: {str(e)}")
         return jsonify({"error": f"Failed to process PDF: {str(e)}"}), 500
 
-
 @app.route('/documents/batch', methods=['POST'])
+@role_required(["admin", "editor"])
 def add_documents_batch():
     """
-    Add multiple documents in batch.
+    Add multiple documents in batch to MongoDB.
     
     Request Body:
         JSON array of document objects
@@ -416,11 +544,9 @@ def add_documents_batch():
             
         results = []
         success_count = 0
+        user_id = get_current_user_id()
         
         # Process each document
-        embeddings = []
-        valid_docs = []
-        
         for doc in data:
             # Validate document
             validation_errors = validate_document(doc)
@@ -434,18 +560,22 @@ def add_documents_batch():
                 
             text = doc.get("text") or doc.get("content")
             metadata = doc.get("metadata", {})
-            doc_id = doc.get("id", str(uuid.uuid4()))
             
             try:
                 # Generate embedding
                 embedding = get_embedding(text)
-                embeddings.append(embedding)
-                valid_docs.append({
-                    "id": doc_id,
+                
+                # Store document in MongoDB
+                document = {
                     "text": text,
+                    "embedding": embedding,
                     "metadata": metadata,
-                    "added_at": time.time()
-                })
+                    "user_id": user_id,
+                    "created_at": datetime.utcnow()
+                }
+                
+                result = db.documents.insert_one(document)
+                doc_id = str(result.inserted_id)
                 
                 results.append({
                     "status": "success",
@@ -460,18 +590,6 @@ def add_documents_batch():
                     "message": str(e)
                 })
         
-        # Add all valid embeddings at once
-        if embeddings:
-            index.add(np.array(embeddings))
-            
-            # Store document references
-            start_idx = index.ntotal - len(embeddings)
-            for i, doc in enumerate(valid_docs):
-                doc_store[start_idx + i] = doc
-            
-            # Persist data
-            save_data()
-        
         logger.info(f"Batch processed: {len(data)} documents, {success_count} added successfully.")
         return jsonify({
             "message": f"Processed {len(data)} documents. {success_count} added successfully.",
@@ -482,11 +600,11 @@ def add_documents_batch():
         logger.error(f"Error in batch upload: {str(e)}")
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-
 @app.route('/search', methods=['GET'])
+@role_required(["admin", "editor", "reader"])
 def search_documents():
     """
-    Search for documents by semantic similarity.
+    Search for documents by semantic similarity using MongoDB Vector Search.
     
     Query Parameters:
         q or query: Search query
@@ -512,31 +630,23 @@ def search_documents():
         except ValueError:
             return jsonify({"error": "Parameter 'n' must be an integer"}), 400
 
-        # Embed query
-        logger.info(f"Searching for: {query}")
-        query_vec = get_embedding(query).reshape(1, -1)
-        distances, indices = index.search(query_vec, min(top_n, index.ntotal))
+        # Get user ID for optional filtering
+        user_id = get_current_user_id()
 
-        # Process basic results
-        results = []
-        for i, idx in enumerate(indices[0]):
-            if idx != -1 and idx in doc_store:  # Check for -1 (FAISS no-match indicator)
-                doc = doc_store[idx]
-                
-                # Clean metadata (remove sensitive data like GCS URIs)
+        # Search using RAG processor's search function
+        logger.info(f"Searching for: {query}")
+        results = rag_processor.search(query, user_id=None, top_n=top_n)  
+        # Note: We're not filtering by user_id to show all docs
+
+        # Process results for output
+        for result in results:
+            # Clean metadata (remove sensitive data like GCS URIs)
+            if "metadata" in result:
                 display_metadata = {}
-                if "metadata" in doc:
-                    for k, v in doc["metadata"].items():
-                        if k != "gcs_uri":  # Skip sensitive GCS URI data
-                            display_metadata[k] = v
-                
-                results.append({
-                    "id": doc["id"],
-                    "text": doc["text"],
-                    "metadata": display_metadata,
-                    "distance": float(distances[0][i]),
-                    "score": 1.0 - float(distances[0][i])  # Convert distance to similarity score
-                })
+                for k, v in result["metadata"].items():
+                    if k != "gcs_uri":  # Skip sensitive GCS URI data
+                        display_metadata[k] = v
+                result["metadata"] = display_metadata
 
         # Group results by source if requested
         if group and results:
@@ -588,15 +698,16 @@ def search_documents():
         logger.error(f"Error in search: {str(e)}")
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-
 @app.route('/vaultgpt', methods=['POST'])
+@role_required(["admin", "editor", "reader"])
 def query_vaultgpt():
     """
-    Query VaultGPT for a response using RAG (Retrieval Augmented Generation).
+    Query VaultGPT for a response using RAG with conversation history.
     
     Request Body:
         JSON object with:
         - query: User query
+        - conversation_id (optional): ID of ongoing conversation
         - custom_prompt (optional): Custom prompt template
         - top_n (optional): Number of documents to retrieve
         
@@ -616,8 +727,10 @@ def query_vaultgpt():
             return jsonify({"error": "Missing 'query' field"}), 400
         
         # Get optional parameters
+        conversation_id = data.get("conversation_id")
         custom_prompt = data.get("custom_prompt")
         top_n = data.get("top_n", 5)
+        user_id = get_current_user_id()
         
         # Validate top_n
         try:
@@ -627,13 +740,70 @@ def query_vaultgpt():
         except ValueError:
             return jsonify({"error": "Parameter 'top_n' must be an integer"}), 400
         
+        # Get conversation history if ID provided
+        conversation_history = []
+        if conversation_id and user_id:
+            conversation = conversation_manager.get_conversation(conversation_id, user_id)
+            if conversation:
+                conversation_history = conversation.get("messages", [])
+        
         # Generate RAG response
         logger.info(f"VaultGPT query: {query}")
         response = rag_processor.generate_response(
             query=query,
+            conversation_history=conversation_history,
             custom_prompt=custom_prompt,
-            top_n=top_n
+            top_n=top_n,
+            user_id=None  # Not filtering by user_id to get all relevant docs
         )
+        
+        # If authenticated, save conversation
+        if user_id:
+            # Create user message
+            user_message = {
+                "role": "user",
+                "content": query,
+                "timestamp": datetime.utcnow()
+            }
+            
+            # Create assistant message
+            assistant_message = {
+                "role": "assistant",
+                "content": response.get("answer", ""),
+                "sources": [
+                    {
+                        "doc_id": doc.get("id"),
+                        "source": doc.get("metadata", {}).get("source", "Unknown"),
+                        "page": doc.get("metadata", {}).get("page", "Unknown")
+                    } for doc in response.get("documents", [])
+                ],
+                "timestamp": datetime.utcnow()
+            }
+            
+            if conversation_id:
+                # Update existing conversation
+                updated = conversation_manager.add_messages(
+                    conversation_id, 
+                    user_id, 
+                    user_message, 
+                    assistant_message
+                )
+                
+                if not updated:
+                    logger.warning(f"Failed to update conversation {conversation_id}")
+            else:
+                # Create new conversation
+                new_title = query[:50] + "..." if len(query) > 50 else query
+                conversation_id = conversation_manager.create_conversation(
+                    user_id, 
+                    new_title, 
+                    user_message, 
+                    assistant_message
+                )
+            
+            # Add conversation_id to response
+            if conversation_id:
+                response["conversation_id"] = conversation_id
         
         logger.info(f"VaultGPT response generated for query: {query}")
         return jsonify(response), 200
@@ -642,24 +812,32 @@ def query_vaultgpt():
         logger.error(f"Error in VaultGPT: {str(e)}")
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
     try:
+        # Count documents
+        document_count = db.documents.count_documents({})
+        
+        # Count unique sources
+        pipeline = [
+            {"$group": {"_id": "$metadata.source"}},
+            {"$count": "unique_sources"}
+        ]
+        unique_sources_result = list(db.documents.aggregate(pipeline))
+        unique_sources = unique_sources_result[0]["unique_sources"] if unique_sources_result else 0
+        
+        # Count PDF documents
+        pdf_count = db.pdf_documents.count_documents({})
+        
+        # Get system info
         storage_info = {
-            "type": "Google Cloud Storage" if GCS_BUCKET_NAME else "Local",
-            "location": GCS_BUCKET_NAME if GCS_BUCKET_NAME else "local filesystem"
+            "type": "MongoDB Atlas + GCS" if GCS_BUCKET_NAME else "MongoDB Atlas",
+            "pdf_storage": GCS_BUCKET_NAME if GCS_BUCKET_NAME else "Not configured"
         }
         
-        # Count unique document sources
-        unique_sources = set()
-        for doc_id, doc in doc_store.items():
-            if "metadata" in doc and "source" in doc["metadata"]:
-                unique_sources.add(doc["metadata"]["source"])
-        
         # Get features supported
-        features = ["search", "batch_upload", "document_upload"]
+        features = ["search", "batch_upload", "document_upload", "auth"]
         if pdf_processor:
             features.append("pdf_processing")
         if rag_processor:
@@ -667,21 +845,21 @@ def health_check():
         
         return jsonify({
             "status": "ok",
-            "documents_indexed": index.ntotal,
-            "chunks_count": index.ntotal,
-            "unique_documents": len(unique_sources),
-            "documents_metadata": len(doc_store),
+            "mongodb_connected": True,
+            "documents_indexed": document_count,
+            "chunks_count": document_count,
+            "unique_documents": unique_sources,
+            "pdf_documents": pdf_count,
             "embedding_model": EMBEDDING_MODEL,
             "llm_model": LLM,
             "storage": storage_info,
-            "app_name": "VectorVault",
+            "app_name": "VectorVault-Pilot",
             "logo_url": request.url_root + "logo",
             "features": features
         })
     except Exception as e:
         logger.error(f"Health check error: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))

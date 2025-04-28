@@ -1,11 +1,8 @@
-"""
-PDF Processing utilities for VectorVault
-"""
-
 import os
 import uuid
 import logging
 from typing import Dict, List, Tuple, Any
+from datetime import datetime
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
@@ -22,7 +19,7 @@ logger = logging.getLogger(__name__)
 class PDFProcessor:
     """Handles PDF document processing, chunking, and embedding generation."""
     
-    def __init__(self, openai_api_key: str, embedding_model: str, gcs_bucket_name: str):
+    def __init__(self, openai_api_key: str, embedding_model: str, gcs_bucket_name: str, db):
         """
         Initialize the PDF processor.
         
@@ -30,10 +27,12 @@ class PDFProcessor:
             openai_api_key: OpenAI API key
             embedding_model: Name of the embedding model to use
             gcs_bucket_name: GCS bucket name for storage
+            db: MongoDB database connection
         """
         self.openai_api_key = openai_api_key
         self.embedding_model = embedding_model
         self.gcs_bucket_name = gcs_bucket_name
+        self.db = db
         
         # Initialize GCS client
         self.storage_client = storage.Client()
@@ -101,16 +100,17 @@ class PDFProcessor:
         
         return temp_file_path
     
-    def process_pdf(self, file_content: bytes, original_filename: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    def process_pdf(self, file_content: bytes, original_filename: str, user_id: str = None) -> Tuple[int, str]:
         """
-        Process a PDF file, create chunks, generate embeddings and metadata.
+        Process a PDF file, create chunks, generate embeddings and store in MongoDB.
         
         Args:
             file_content: PDF file content in bytes
             original_filename: Original filename
+            user_id: ID of the user uploading the document
             
         Returns:
-            Tuple of (chunks with embeddings, chunks with metadata)
+            Tuple of (number of chunks processed, document ID)
         """
         # Upload to GCS
         gcs_uri = self.upload_pdf_to_gcs(file_content, original_filename)
@@ -127,10 +127,23 @@ class PDFProcessor:
         # Split the documents into chunks
         chunks = self.text_splitter.split_documents(documents)
         
-        # Create embeddings and metadata
-        embedded_chunks = []
-        chunk_metadata = []
+        # Generate a document ID for the overall PDF
+        document_id = str(uuid.uuid4())
         
+        # Create document in MongoDB
+        pdf_document = {
+            "document_id": document_id,
+            "filename": original_filename,
+            "gcs_uri": gcs_uri,
+            "chunk_count": len(chunks),
+            "user_id": user_id,
+            "uploaded_at": datetime.utcnow(),
+            "metadata": {}
+        }
+        
+        self.db.pdf_documents.insert_one(pdf_document)
+        
+        # Process and store chunks
         for i, chunk in enumerate(chunks):
             # Extract page number from chunk metadata
             page_num = chunk.metadata.get('page', 0) + 1  # LangChain uses 0-indexed pages
@@ -138,29 +151,26 @@ class PDFProcessor:
             # Generate embedding
             embedding = self.embeddings.embed_query(chunk.page_content)
             
-            # Create metadata
-            metadata = {
-                "id": f"{uuid.uuid4()}",
+            # Create document with embedding in MongoDB
+            chunk_document = {
                 "text": chunk.page_content,
+                "embedding": embedding,
                 "metadata": {
                     "source": original_filename,
                     "page": page_num,
                     "chunk_index": i,
                     "gcs_uri": gcs_uri,
-                }
+                    "document_id": document_id
+                },
+                "user_id": user_id,
+                "created_at": datetime.utcnow()
             }
             
-            embedded_chunks.append({
-                "id": metadata["id"],
-                "embedding": embedding,
-                "text": chunk.page_content,
-            })
-            
-            chunk_metadata.append(metadata)
+            self.db.documents.insert_one(chunk_document)
         
         # Clean up temp file
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
         
         logger.info(f"Processed PDF {original_filename} into {len(chunks)} chunks")
-        return embedded_chunks, chunk_metadata 
+        return len(chunks), document_id

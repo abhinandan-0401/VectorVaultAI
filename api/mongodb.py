@@ -105,8 +105,20 @@ def setup_collections(db):
 
 def initialize_mongodb():
     """Initialize MongoDB connection and setup collections"""
-    client = get_mongodb_client()
-    db_name = os.getenv("MONGODB_DATABASE", "vectorvault")
-    db = client[db_name]
+    mongodb_uri = os.getenv("MONGODB_URI")
+    database_name = os.getenv("MONGODB_DATABASE", "vectorvault-mongo")
+    
+    logger.info(f"Connecting to MongoDB database: {database_name}")
+    logger.info(f"Using MongoDB URI: {mongodb_uri.split('@')[1] if '@' in mongodb_uri else 'URI hidden for security'}")
+    
+    client = MongoClient(mongodb_uri)
+    db = client[database_name]
+    
+    # List all databases in this cluster
+    try:
+        available_dbs = client.list_database_names()
+        logger.info(f"Available databases: {available_dbs}")
+    except Exception as e:
+        logger.error(f"Could not list databases: {str(e)}")
     setup_collections(db)
     return db

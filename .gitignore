@@ -30,9 +30,13 @@ venv/
 ENV/
 env/
 
-# FAISS index and document storage
+# Generated files
+api/app_logo.png
+ui/app_logo.png
+
+# Legacy files (for backward compatibility)
 faiss_index.index
-document_metadata.json
+documents_metadata.json
 
 # IDE specific files
 .idea/
@@ -56,3 +60,15 @@ Thumbs.db
 /tmp/*
 
 /mongo-test-env/*
+
+# Logs
+logs
+*.log
+
+# MongoDB local data
+mongodb_data/
+
+# Document storage
+docs/
+documents/
+uploads/

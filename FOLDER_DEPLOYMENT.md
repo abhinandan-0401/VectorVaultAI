@@ -5,10 +5,13 @@ This guide explains how to deploy the VectorVault application using a folder-bas
 ## Architecture
 
 The application is separated into two folders:
-1. **api/** - Contains the Flask API backend
+1. **api/** - Contains the Flask API backend for document processing and vector search
 2. **ui/** - Contains the Streamlit UI frontend
 
-Each component is deployed as a separate Cloud Run service, with the UI connecting to the API.
+Each component is deployed as a separate Cloud Run service, with the UI connecting to the API. The system uses:
+- **MongoDB Atlas** for vector storage and semantic search
+- **Google Cloud Storage** for storing PDF files
+- **OpenAI API** for generating text embeddings and powering RAG functionality
 
 ## Prerequisites
 
@@ -137,7 +140,7 @@ gcloud run deploy vector-vault-api \
   --allow-unauthenticated \
   --memory 1Gi \
   --cpu 1 \
-  --set-env-vars="OPENAI_API_KEY=your_openai_key,GCS_BUCKET_NAME=your_bucket_name"
+  --set-env-vars="OPENAI_API_KEY=your-openai-api-key,GCS_BUCKET_NAME=your-bucket-name"
 
 # Go back to the root folder
 cd ..
@@ -234,7 +237,7 @@ For better security, use Secret Manager instead of environment variables:
 
 ```bash
 # Create a secret for the OpenAI API key
-echo -n "your_openai_key" | gcloud secrets create openai-api-key --data-file=-
+echo -n "your-openai-api-key" | gcloud secrets create openai-api-key --data-file=-
 
 # Grant the API service access to the secret
 gcloud secrets add-iam-policy-binding openai-api-key \
@@ -249,7 +252,7 @@ gcloud run deploy vector-vault-api \
   --allow-unauthenticated \
   --memory 1Gi \
   --cpu 1 \
-  --set-env-vars="GCS_BUCKET_NAME=your_bucket_name" \
+  --set-env-vars="GCS_BUCKET_NAME=your-bucket-name" \
   --update-secrets="OPENAI_API_KEY=openai-api-key:latest"
 ```
 
@@ -267,8 +270,8 @@ docker build -t vector-vault-api .
 
 # Run the container
 docker run -p 8080:8080 \
-  -e OPENAI_API_KEY=your_openai_key \
-  -e GCS_BUCKET_NAME=your_bucket_name \
+  -e OPENAI_API_KEY=your-openai-api-key \
+  -e GCS_BUCKET_NAME=your-bucket-name \
   vector-vault-api
 
 cd ..
@@ -338,4 +341,26 @@ If you see an error like `The api_key client option must be set either by passin
 
 1. Verify the OPENAI_API_KEY environment variable is set correctly
 2. For production, use Secret Manager instead of environment variables
-3. Check logs: `gcloud run services logs read vector-vault-api --region YOUR_REGION` 
+3. Check logs: `gcloud run services logs read vector-vault-api --region YOUR_REGION`
+
+## API Environment Variables
+
+When deploying the API, you need to set these key environment variables:
+
+```bash
+# OpenAI Configuration
+OPENAI_API_KEY=your-openai-api-key
+EMBEDDING_MODEL=text-embedding-3-small  # Default model
+LLM=gpt-4o  # Default LLM for RAG
+
+# MongoDB Configuration
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority
+MONGODB_DATABASE=vectorvault  # Or your preferred database name
+
+# GCS Configuration
+GCS_BUCKET_NAME=your-bucket-name  # For PDF storage
+
+# JWT Authentication
+JWT_SECRET_KEY=your-secure-secret-key
+JWT_ACCESS_TOKEN_EXPIRES=86400  # 24 hours in seconds
+``` 

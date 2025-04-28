@@ -2,7 +2,7 @@
 
 > Knowledge, Instantly Retrieved
 
-VectorVault is a semantic document search engine that uses OpenAI embeddings and FAISS vector database to provide powerful search capabilities with RAG (Retrieval Augmented Generation).
+VectorVault is a semantic document search engine that uses OpenAI embeddings and MongoDB Atlas vector search to provide powerful search capabilities with RAG (Retrieval Augmented Generation).
 
 <div align="center">
   <img src="ui/app_logo.png" alt="VectorVault Logo" width="300"/>
@@ -14,7 +14,8 @@ VectorVault is a semantic document search engine that uses OpenAI embeddings and
 - 📑 **PDF Processing**: Upload and process PDF files up to 100MB with automatic chunking
 - 🤖 **VaultGPT**: AI-powered chat interface that uses RAG to answer questions based on your documents 
 - 🧠 **OpenAI Integration**: Leverages text-embedding-3-small for embeddings and GPT-4o for RAG
-- 💾 **Persistent Storage**: Google Cloud Storage for vector indices, metadata, and PDF files
+- 🗄️ **MongoDB Atlas**: Vector database with semantic search capabilities for document storage and retrieval
+- 💾 **Persistent Storage**: Google Cloud Storage for document files and PDF storage
 - 🌐 **REST API**: Simple HTTP endpoints for integration
 - 🖥️ **Streamlit UI**: User-friendly interface with dark mode support
 - 🐳 **Docker Ready**: Containerized deployment for both development and production
@@ -48,6 +49,7 @@ VectorVault is a semantic document search engine that uses OpenAI embeddings and
 
 - Python 3.10 or higher
 - [OpenAI API key](https://platform.openai.com/)
+- [MongoDB Atlas account](https://www.mongodb.com/cloud/atlas) for vector storage
 - Git (for cloning the repository)
 - Docker (optional, for containerized deployment)
 - Google Cloud SDK (optional, for GCP deployment)
@@ -380,5 +382,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 <div align="center">
   <img src="ui/app_logo.png" alt="VectorVault Logo" width="100"/>
   <p><em>VectorVault - Knowledge, Instantly Retrieved</em><br>
-  Powered by OpenAI and FAISS</p>
+  Powered by OpenAI and MongoDB Atlas</p>
 </div> 

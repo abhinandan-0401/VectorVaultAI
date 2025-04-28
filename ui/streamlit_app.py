@@ -618,7 +618,7 @@ def display_sidebar_info():
         # Only display "How it works" section without showing features in sidebar
         st.markdown("---")
         st.caption("VectorVault - Knowledge, Instantly Retrieved")
-        st.caption("Powered by OpenAI and FAISS")
+        st.caption("Powered by OpenAI and MongoDB Atlas")
 
 def main():
     """Main application function."""

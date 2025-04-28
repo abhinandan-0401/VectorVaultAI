@@ -5,11 +5,12 @@ This guide explains how to deploy the VectorVault application to Google Cloud Pl
 ## Application Architecture
 
 The application consists of:
-1. **Flask backend API** - Handles document indexing, storage, and search
+1. **Flask backend API** - Handles document processing, vector embedding, and search operations
 2. **Streamlit web interface** - User-friendly frontend for interacting with the system
-3. **Cloud Storage** - Persists the FAISS index and document metadata
+3. **MongoDB Atlas** - Vector database for storing embeddings and enabling semantic search
+4. **Cloud Storage** - Stores PDF files and document metadata
 
-In our deployment, both Flask and Streamlit run in the same container, managed by supervisord.
+In this deployment, both Flask and Streamlit run in separate containers, each managed by Cloud Run.
 
 ## Prerequisites
 
@@ -99,7 +100,7 @@ gcloud run deploy vectorvault-advanced-api \
 
 ### Create a Cloud Storage Bucket
 
-1. Create a storage bucket for persisting your FAISS index and document metadata:
+1. Create a storage bucket for storing your PDF documents and other files:
 
 ```bash
 # Replace YOUR_BUCKET_NAME with a globally unique bucket name
@@ -206,8 +207,10 @@ streamlit run streamlit_app.py
 ## Data Persistence
 
 The application will:
-- Load the FAISS index and document metadata from Cloud Storage on startup
-- Save updates to Cloud Storage whenever documents are added
+- Store document embeddings and metadata in MongoDB Atlas
+- Save PDF files to Google Cloud Storage
+- Use MongoDB's vector search capabilities for semantic search
+- Maintain conversation history in MongoDB
 
 ## Updating the Deployment
 

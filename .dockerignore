@@ -34,7 +34,12 @@ venv/
 ENV/
 env/
 
-# FAISS index and documents (will be loaded from GCS in production)
+# Sensitive files
+.env
+**/*.key
+.keys/
+
+# Legacy files (not used in current version)
 faiss_index.index
 document_metadata.json
 
@@ -46,4 +51,12 @@ pytest.ini
 requirements-dev.txt
 
 # Local data
-sample_data/ 
+sample_data/
+
+# MongoDB local data
+mongodb_data/
+
+# Document storage (will be stored in MongoDB and GCS in production)
+docs/
+documents/
+uploads/ 

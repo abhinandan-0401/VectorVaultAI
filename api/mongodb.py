@@ -65,6 +65,7 @@ def setup_collections(db):
                 logger.info("Created vector search index for 'documents' collection")
         except Exception as e:
             logger.error(f"Error creating vector search index: {str(e)}")
+            logger.info("Note: Vector search requires MongoDB Atlas with Atlas Search enabled.")
             # Continue anyway, as this might be due to lack of Atlas Search support
         
         # PDF documents collection (metadata about whole PDFs)

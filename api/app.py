@@ -374,6 +374,23 @@ def get_conversations():
         logger.error(f"Get conversation error: {str(e)}")
         return jsonify({"error": f"Failed to get conversation: {str(e)}"}), 500
 
+@app.route('/conversations/<conversation_id>', methods=['GET'])
+@jwt_required()
+def get_conversation(conversation_id):
+    """Get a specific conversation by ID"""
+    try:
+        user_id = get_current_user_id()
+        conversation = conversation_manager.get_conversation(conversation_id, user_id)
+        
+        if not conversation:
+            return jsonify({"error": "Conversation not found"}), 404
+        
+        return jsonify(conversation), 200
+    
+    except Exception as e:
+        logger.error(f"Get conversation error: {str(e)}")
+        return jsonify({"error": f"Failed to get conversation: {str(e)}"}), 500
+
 @app.route('/conversations/<conversation_id>', methods=['DELETE'])
 @jwt_required()
 def delete_conversation(conversation_id):

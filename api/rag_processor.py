@@ -84,17 +84,19 @@ class RAGProcessor:
         
         # Embed query
         query_vec = get_embedding(query)
+
+        # Convert NumPy array to Python list if needed
+        query_vec_list = query_vec.tolist() if hasattr(query_vec, 'tolist') else query_vec
         
-        # Build MongoDB search pipeline
+        # Build MongoDB search pipeline using $vectorSearch
         pipeline = [
             {
-                "$search": {
+                "$vectorSearch": {
                     "index": "vector_index",
-                    "knnBeta": {
-                        "vector": query_vec,
-                        "path": "embedding", 
-                        "k": top_n
-                    }
+                    "path": "embedding",
+                    "queryVector": query_vec_list,
+                    "numCandidates": top_n * 10,  # Fetch more candidates for better results
+                    "limit": top_n
                 }
             },
             {
@@ -111,20 +113,45 @@ class RAGProcessor:
         if user_id:
             pipeline.insert(1, {"$match": {"user_id": user_id}})
         
-        # Execute search
-        results = list(self.db.documents.aggregate(pipeline))
-        
-        # Process results
-        processed_results = []
-        for doc in results:
-            processed_results.append({
-                "id": str(doc["_id"]),
-                "text": doc["text"],
-                "metadata": doc["metadata"],
-                "score": doc["score"]
-            })
-        
-        return processed_results
+        try:
+            # Execute search
+            results = list(self.db.documents.aggregate(pipeline))
+            
+            # Process results
+            processed_results = []
+            for doc in results:
+                processed_results.append({
+                    "id": str(doc["_id"]),
+                    "text": doc["text"],
+                    "metadata": doc["metadata"],
+                    "score": doc["score"]
+                })
+            
+            return processed_results
+        except Exception as e:
+            logger.error(f"Vector search error: {str(e)}")
+            
+            # Fallback to regular search if vector search fails
+            try:
+                logger.info("Falling back to regular document search")
+                fallback_results = list(self.db.documents.find(
+                    {"user_id": user_id} if user_id else {},
+                    {"text": 1, "metadata": 1}
+                ).limit(top_n))
+                
+                processed_fallback = []
+                for doc in fallback_results:
+                    processed_fallback.append({
+                        "id": str(doc["_id"]),
+                        "text": doc["text"],
+                        "metadata": doc["metadata"],
+                        "score": 0.0  # No score for fallback results
+                    })
+                
+                return processed_fallback
+            except Exception as fallback_err:
+                logger.error(f"Fallback search error: {str(fallback_err)}")
+                return []
     
     def _prepare_context(self, documents: List[Dict[str, Any]]) -> str:
         """

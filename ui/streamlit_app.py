@@ -466,8 +466,19 @@ def vaultgpt_tab(health_data, auth_headers):
                     "sources": sources
                 })
                 
-                # Force rerun to update the UI
-                st.rerun()
+                # Display the updated chat immediately instead of forcing a rerun
+                # This was causing the chat to reset
+                st.markdown(f"<div class='message-container'><div class='ai-message'>{answer}")
+                
+                # Add source citations if present
+                if sources:
+                    st.markdown("<div class='source-citation'>Sources: " + 
+                               "; ".join([f"{src.get('source', 'Unknown')}" + 
+                                         (f", p.{src.get('page', '')}" if src.get('page', '') else "") 
+                                         for src in sources]) + 
+                               "</div>", unsafe_allow_html=True)
+                
+                st.markdown("</div></div>", unsafe_allow_html=True)
             else:
                 st.error(f"Error: {response.json().get('error', 'Unknown error')}")
                 logger.error(f"VaultGPT error: {response.json().get('error')}")

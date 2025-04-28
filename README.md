@@ -213,21 +213,12 @@ On first startup, the system creates a default admin account using the environme
 | User Management | ✅ | ❌ | ❌ |
 | System Settings | ✅ | ❌ | ❌ |
 
-## Conversation History
-
-VaultGPT now maintains conversation history to provide more contextual responses. Key features:
-
-- Persistent conversations stored in MongoDB
-- Context-aware responses that reference previous exchanges
-- Ability to manage and switch between multiple conversations
-- Source citations for better transparency
-
 ## MongoDB Atlas Integration
 
 VectorVault now uses MongoDB Atlas for scalable document and vector storage:
 
-- Vector search capabilities for semantic document retrieval
-- Conversation history storage
+- Vector search capabilities for semantic document retrieval using the $vectorSearch operator
+- Optimized conversation history storage and retrieval 
 - User authentication and management
 - Document metadata and organization
 
@@ -242,6 +233,33 @@ To configure MongoDB Atlas:
    ```
 
 2. On first run, the system will create necessary collections and indexes
+
+3. Create a vector search index named "vector_index" with the following configuration:
+   ```json
+   {
+     "mappings": {
+       "dynamic": true,
+       "fields": {
+         "embedding": {
+           "type": "knnVector",
+           "dimensions": 1536,
+           "similarity": "cosine"
+         }
+       }
+     }
+   }
+   ```
+
+## Conversation History
+
+VaultGPT maintains conversation history to provide more contextual responses. Key features:
+
+- Persistent conversations stored in MongoDB
+- Context-aware responses that reference previous exchanges
+- Ability to manage and switch between multiple conversations
+- Source citations for better transparency
+- Improved UI with real-time conversation updates (no page reloads)
+- Fixed conversation history display for seamless chat interactions
 
 ## Usage
 

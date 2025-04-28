@@ -80,7 +80,47 @@ gcloud services enable storage.googleapis.com
 gsutil mb -l YOUR_REGION gs://YOUR_BUCKET_NAME
 ```
 
-### 5. Deploy the API Service
+### 5. Set Up MongoDB Atlas
+
+1. Create a MongoDB Atlas account at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
+2. Create a new cluster (M0 free tier is sufficient for testing)
+3. Configure database access:
+   - Create a database user with read/write permissions
+   - Store credentials securely
+4. Configure network access:
+   - Add your development IP address
+   - For production, allow access from anywhere (0.0.0.0/0) or specific GCP IP ranges
+5. Get your connection string:
+   ```
+   mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority
+   ```
+
+6. After initial deployment, create a vector search index:
+   - Log in to MongoDB Atlas dashboard
+   - Navigate to your cluster
+   - Click on "Search" in the left navigation
+   - Click "Create Search Index"
+   - Select your database and the "documents" collection
+   - Choose "JSON Editor" for configuration method
+   - Enter the following index definition:
+     ```json
+     {
+       "mappings": {
+         "dynamic": true,
+         "fields": {
+           "embedding": {
+             "type": "knnVector",
+             "dimensions": 1536,
+             "similarity": "cosine"
+           }
+         }
+       }
+     }
+     ```
+   - Set the index name to "vector_index"
+   - Click "Create Search Index"
+
+### 6. Deploy the API Service
 
 ```bash
 # Navigate to the API directory
@@ -103,7 +143,7 @@ gcloud run deploy vector-vault-api \
 cd ..
 ```
 
-### 6. Set Storage Permissions for API Service
+### 7. Set Storage Permissions for API Service
 
 ```bash
 # Get the service account
@@ -115,7 +155,7 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --role="roles/storage.objectAdmin"
 ```
 
-### 7. Deploy the UI Service
+### 8. Deploy the UI Service
 
 #### For Linux/macOS
 
@@ -180,7 +220,7 @@ REM Go back to the root folder
 cd ..
 ```
 
-### 8. Access the Deployed Application
+### 9. Access the Deployed Application
 
 ```bash
 # Get the UI URL

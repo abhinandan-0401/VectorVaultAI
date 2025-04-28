@@ -34,6 +34,36 @@ In our deployment, both Flask and Streamlit run in the same container, managed b
    mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority
    ```
 
+### Creating the Vector Search Index
+
+After deploying your application for the first time, you need to create a vector search index in MongoDB Atlas:
+
+1. Log in to your MongoDB Atlas account
+2. Navigate to your cluster
+3. Click on "Search" in the left navigation menu
+4. Click "Create Search Index"
+5. Select your database and the "documents" collection
+6. Choose "JSON Editor" for the configuration method
+7. Enter the following index definition:
+   ```json
+   {
+     "mappings": {
+       "dynamic": true,
+       "fields": {
+         "embedding": {
+           "type": "knnVector",
+           "dimensions": 1536,
+           "similarity": "cosine"
+         }
+       }
+     }
+   }
+   ```
+8. Set the index name to "vector_index" (this is important - it must match the name in the code)
+9. Click "Create Search Index"
+
+The index will take a few minutes to build, especially if you already have documents in your collection.
+
 ### Environment Variables for Authentication
 
 Add these environment variables to your Cloud Run services:

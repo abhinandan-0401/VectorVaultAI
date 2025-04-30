@@ -1,0 +1,17 @@
+flask
+openai
+python-dotenv
+numpy
+google-cloud-storage
+gunicorn
+langchain
+langchain-openai
+langchain-community
+pypdf
+tiktoken
+pymongo
+pymongo[srv]
+flask-jwt-extended
+bcrypt
+passlib
+python-dateutil

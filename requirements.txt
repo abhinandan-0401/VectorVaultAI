@@ -1,8 +1,0 @@
-flask
-openai
-faiss-cpu
-python-dotenv
-numpy
-streamlit
-requests
-pandas

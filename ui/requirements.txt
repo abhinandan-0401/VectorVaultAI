@@ -1,0 +1,9 @@
+streamlit
+requests
+pandas
+python-dotenv
+Pillow
+matplotlib
+pyarrow
+streamlit-authenticator
+pyjwt

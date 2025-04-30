@@ -1,0 +1,70 @@
+# Git
+.git
+.gitignore
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+
+# Distribution / packaging
+.env
+.env.*
+!.env.example
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment
+venv/
+ENV/
+env/
+ai_doc_search/
+mongo-test-env/
+
+# Sensitive files
+**/*.key
+.keys/
+
+# Legacy files (not used in current version)
+faiss_index.index
+document_metadata.json
+
+# Test and development files
+notebooks/
+tmp/
+VectorVaultAI/
+.coverage
+pytest.ini
+
+# Local data
+sample_data/
+
+# MongoDB local data
+mongodb_data/
+
+# Document storage (will be stored in MongoDB and GCS in production)
+docs/
+documents/
+uploads/
+
+# Deployment scripts (not needed in container)
+*.sh
+*.ps1
+cleanup.* 

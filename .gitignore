@@ -1,15 +1,14 @@
 # Environment variables
 .env
+.env.*
+!.env.example
 
 # Python
-ai_doc_search/*
-.pytest_cache/*
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -29,6 +28,8 @@ var/
 venv/
 ENV/
 env/
+ai_doc_search/
+mongo-test-env/
 
 # Generated files
 api/app_logo.png
@@ -50,20 +51,11 @@ Thumbs.db
 
 # Test Results
 .coverage
+.pytest_cache/
 
-# Test Coverage
-.coverage.*
-
-*.sh
-*.ps1
-
-/tmp/*
-
-/mongo-test-env/*
-
-# Logs
-logs
-*.log
+# Temporary files
+/tmp/
+/VectorVaultAI/
 
 # MongoDB local data
 mongodb_data/
@@ -72,3 +64,15 @@ mongodb_data/
 docs/
 documents/
 uploads/
+
+# Logs
+logs
+*.log
+
+# Clean and Init scripts
+*.sh
+*.ps1
+
+# Shell scripts (keep in repo but exclude from git language stats)
+# *.sh linguist-vendored
+# *.ps1 linguist-vendored

@@ -323,32 +323,32 @@ VaultGPT will:
 
 ```
 vectorvault/
-
-├── api/ # API component for deployment
-│ ├── app.py # Flask API backend
-│ ├── auth.py # Authentication and RBAC
-│ ├── mongodb.py # MongoDB connection and setup
-│ ├── models.py # Data models and schemas
-│ ├── conversations.py # Conversation management
-│ ├── pdf_processor.py # PDF processing utility
-│ ├── rag_processor.py # RAG implementation
-│ ├── Dockerfile # API container definition
-│ ├── requirements.txt # API dependencies
-│ └── app_logo.png # Application logo
-├── ui/ # UI component for deployment
-│ ├── streamlit_app.py # Streamlit frontend
-│ ├── auth_components.py # Authentication UI components
-│ ├── conversation_components.py # Conversation UI components
-│ ├── Dockerfile # UI container definition
-│ ├── requirements.txt # UI dependencies
-│ └── app_logo.png # Application logo
-├── docker-compose.yml # Docker Compose configuration
-├── setup_folders.ps1 # PowerShell setup script
-├── setup_folders.sh # Bash setup script
-├── FOLDER_DEPLOYMENT.md # Folder-based deployment guide
-├── GCP_DEPLOYMENT.md # Google Cloud Platform deployment guide
-├── README.md # Documentation
-└── LICENSE # MIT License
+├── api/                  # API component for deployment
+│   ├── app.py            # Flask API backend
+│   ├── auth.py           # Authentication and RBAC
+│   ├── mongodb.py        # MongoDB connection and setup
+│   ├── pdf_processor.py  # PDF processing utility
+│   ├── rag_processor.py  # RAG implementation
+│   ├── conversations.py  # Conversation management
+│   ├── Dockerfile        # API container definition
+│   ├── requirements.txt  # API dependencies
+│   └── app_logo.png      # Application logo
+├── ui/                   # UI component for deployment
+│   ├── streamlit_app.py  # Streamlit frontend
+│   ├── auth_components.py # Authentication UI components
+│   ├── Dockerfile        # UI container definition
+│   ├── requirements.txt  # UI dependencies
+│   └── app_logo.png      # Application logo
+├── tests/                # Test files
+│   ├── conftest.py       # Test fixtures
+│   ├── test_*.py         # Test modules
+│   └── README.md         # Testing documentation
+├── sample_data/          # Sample data for demo purposes
+├── docker-compose.yml    # Docker Compose configuration
+├── FOLDER_DEPLOYMENT.md  # Folder-based deployment guide
+├── GCP_DEPLOYMENT.md     # Google Cloud Platform deployment guide
+├── README.md             # Documentation
+└── LICENSE               # MIT License
 ```
 
 ## Testing

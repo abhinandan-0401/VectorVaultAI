@@ -12,6 +12,8 @@ __pycache__/
 
 # Distribution / packaging
 .env
+.env.*
+!.env.example
 env/
 build/
 develop-eggs/
@@ -33,9 +35,10 @@ wheels/
 venv/
 ENV/
 env/
+ai_doc_search/
+mongo-test-env/
 
 # Sensitive files
-.env
 **/*.key
 .keys/
 
@@ -45,10 +48,10 @@ document_metadata.json
 
 # Test and development files
 notebooks/
-tests/
+tmp/
+VectorVaultAI/
 .coverage
 pytest.ini
-requirements-dev.txt
 
 # Local data
 sample_data/
@@ -59,4 +62,9 @@ mongodb_data/
 # Document storage (will be stored in MongoDB and GCS in production)
 docs/
 documents/
-uploads/ 
+uploads/
+
+# Deployment scripts (not needed in container)
+*.sh
+*.ps1
+cleanup.* 
